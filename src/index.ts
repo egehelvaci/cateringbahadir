@@ -9,7 +9,8 @@ import { errorHandler } from './middleware/errorHandler';
 import { rateLimiter } from './middleware/rateLimiter';
 import { logger } from './utils/logger';
 import { prisma } from './config/database';
-import { GmailPollingService } from './services/gmail-polling.service';
+// import { GmailPollingService } from './services/gmail-polling.service';
+import { ImapPollingService } from './services/imap-polling.service';
 
 import googleOAuthRoutes from './routes/google-oauth.routes';
 import authRoutes from './routes/auth.routes';
@@ -49,11 +50,18 @@ const startServer = async () => {
     await prisma.$connect();
     logger.info('Database connected successfully');
     
-    // Start Gmail polling service
-    const gmailPoller = new GmailPollingService();
+    // Start Gmail polling service (Old Gmail API - disabled)
+    // const gmailPoller = new GmailPollingService();
+    // if (process.env.NODE_ENV === 'production' || process.env.ENABLE_GMAIL_POLLING === 'true') {
+    //   gmailPoller.startPolling();
+    //   logger.info('Gmail polling service started');
+    // }
+
+    // Start IMAP polling service for automatic email saving
+    const imapPoller = new ImapPollingService();
     if (process.env.NODE_ENV === 'production' || process.env.ENABLE_GMAIL_POLLING === 'true') {
-      gmailPoller.startPolling();
-      logger.info('Gmail polling service started');
+      imapPoller.startPolling();
+      logger.info('IMAP polling service started - emails will be automatically saved to database');
     }
     
     app.listen(PORT, () => {

@@ -1,6 +1,7 @@
 const Imap = require('imap');
 const { simpleParser } = require('mailparser');
 import { logger } from '../utils/logger';
+import { prisma } from '../config/database';
 
 interface EmailMessage {
   id: string;
@@ -45,7 +46,7 @@ export class ImapGmailService {
     });
   }
 
-  async getMessages(folder: string = 'INBOX', limit: number = 50, filterCatering: boolean = false): Promise<EmailMessage[]> {
+  async getMessages(folder: string = 'INBOX', limit: number = 50, filterCatering: boolean = false, saveToDb: boolean = true): Promise<EmailMessage[]> {
     return new Promise((resolve, reject) => {
       this.imap.openBox(folder, true, (err: any, mailbox: any) => {
         if (err) {
@@ -80,8 +81,10 @@ export class ImapGmailService {
 
           const messages: EmailMessage[] = [];
           const fetch = this.imap.fetch(latestUids, fetchOptions);
+          let pendingMessages = 0;
 
           fetch.on('message', (msg: any, seqno: any) => {
+            pendingMessages++;
             let emailData: any = {};
 
             msg.on('body', (stream: any, _info: any) => {
@@ -120,7 +123,16 @@ export class ImapGmailService {
             });
 
             msg.once('end', () => {
-              messages.push(emailData);
+              // Wait a bit for parsing to complete
+              setTimeout(() => {
+                messages.push(emailData);
+                pendingMessages--;
+                
+                // Check if all messages are processed
+                if (pendingMessages === 0) {
+                  this.processMessages(messages, filterCatering, saveToDb, resolve);
+                }
+              }, 100);
             });
           });
 
@@ -130,15 +142,7 @@ export class ImapGmailService {
           });
 
           fetch.once('end', () => {
-            let filteredMessages = messages;
-            
-            if (filterCatering) {
-              filteredMessages = messages.filter(msg => this.isCateringRelated(msg));
-              logger.info(`Filtered ${messages.length} messages to ${filteredMessages.length} catering/broker related messages`);
-            }
-            
-            logger.info(`Successfully fetched ${filteredMessages.length} messages`);
-            resolve(filteredMessages);
+            // This will be handled by processMessages when all messages are complete
           });
         });
       });
@@ -151,6 +155,23 @@ export class ImapGmailService {
       logger.info('IMAP connection closed');
       resolve();
     });
+  }
+
+  private async processMessages(messages: EmailMessage[], filterCatering: boolean, saveToDb: boolean, resolve: any): Promise<void> {
+    let filteredMessages = messages;
+    
+    if (filterCatering) {
+      filteredMessages = messages.filter(msg => this.isCateringRelated(msg));
+      logger.info(`Filtered ${messages.length} messages to ${filteredMessages.length} catering/broker related messages`);
+    }
+    
+    // Save to database if requested
+    if (saveToDb) {
+      await this.saveMessagesToDatabase(filteredMessages);
+    }
+    
+    logger.info(`Successfully fetched ${filteredMessages.length} messages`);
+    resolve(filteredMessages);
   }
 
   private isCateringRelated(message: EmailMessage): boolean {
@@ -225,6 +246,54 @@ export class ImapGmailService {
                    subjectLower.includes('kampanya');
 
     return hasKeyword && isBusinessEmail && !isSpam && !isBlacklisted;
+  }
+
+  private async saveMessagesToDatabase(messages: EmailMessage[]): Promise<void> {
+    try {
+      for (const message of messages) {
+        // Check if message already exists
+        const existing = await prisma.inboundEmail.findFirst({
+          where: {
+            OR: [
+              { messageId: `gmail-${message.id}` },
+              { 
+                AND: [
+                  { fromAddr: message.from },
+                  { subject: message.subject },
+                  { receivedAt: message.date }
+                ]
+              }
+            ]
+          }
+        });
+
+        if (!existing) {
+          await prisma.inboundEmail.create({
+            data: {
+              messageId: `gmail-${message.id}`,
+              fromAddr: message.from,
+              subject: message.subject,
+              receivedAt: message.date,
+              raw: message.body,
+              parsedType: this.isCateringRelated(message) ? 'CARGO' : null,
+              parsedJson: {
+                id: message.id,
+                to: message.to,
+                html: message.html,
+                attachments: message.attachments,
+                source: 'gmail-imap'
+              }
+            }
+          });
+          
+          logger.info(`Saved email to database: ${message.subject}`);
+        } else {
+          logger.debug(`Email already exists in database: ${message.subject}`);
+        }
+      }
+    } catch (error) {
+      logger.error('Error saving messages to database:', error);
+    }
   }
 
   static async testConnection(email: string, appPassword: string): Promise<boolean> {

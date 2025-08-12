@@ -54,6 +54,7 @@ router.post('/gmail/imap/messages',
     body('folder').optional().isString().withMessage('Folder must be a string'),
     body('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
     body('filterCatering').optional().isBoolean().withMessage('FilterCatering must be a boolean'),
+    body('saveToDb').optional().isBoolean().withMessage('SaveToDb must be a boolean'),
   ],
   validate,
   async (req: Request, res: Response, next: NextFunction) => {
@@ -63,7 +64,8 @@ router.post('/gmail/imap/messages',
         appPassword = process.env.GMAIL_IMAP_APP_PASSWORD, 
         folder = 'INBOX', 
         limit = 50, 
-        filterCatering = false 
+        filterCatering = false,
+        saveToDb = true
       } = req.body;
       
       logger.info(`Fetching messages from ${folder} for: ${email}`);
@@ -71,7 +73,7 @@ router.post('/gmail/imap/messages',
       const imapService = new ImapGmailService(email, appPassword);
       await imapService.connect();
       
-      const messages = await imapService.getMessages(folder, limit, filterCatering);
+      const messages = await imapService.getMessages(folder, limit, filterCatering, saveToDb);
       await imapService.disconnect();
       
       res.json({
