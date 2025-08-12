@@ -14,13 +14,16 @@ router.post('/gmail/imap/test',
   authenticate,
   strictRateLimiter,
   [
-    body('email').isEmail().withMessage('Valid Gmail address is required'),
-    body('appPassword').isLength({ min: 16, max: 16 }).withMessage('Gmail App Password must be 16 characters'),
+    body('email').optional().isEmail().withMessage('Valid Gmail address is required'),
+    body('appPassword').optional().isLength({ min: 16, max: 16 }).withMessage('Gmail App Password must be 16 characters'),
   ],
   validate,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { email, appPassword } = req.body;
+      const { 
+        email = process.env.GMAIL_IMAP_EMAIL, 
+        appPassword = process.env.GMAIL_IMAP_APP_PASSWORD 
+      } = req.body;
       
       logger.info(`Testing IMAP connection for: ${email}`);
       
@@ -46,8 +49,8 @@ router.post('/gmail/imap/messages',
   authenticate,
   strictRateLimiter,
   [
-    body('email').isEmail().withMessage('Valid Gmail address is required'),
-    body('appPassword').isLength({ min: 16, max: 16 }).withMessage('Gmail App Password must be 16 characters'),
+    body('email').optional().isEmail().withMessage('Valid Gmail address is required'),
+    body('appPassword').optional().isLength({ min: 16, max: 16 }).withMessage('Gmail App Password must be 16 characters'),
     body('folder').optional().isString().withMessage('Folder must be a string'),
     body('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
     body('filterCatering').optional().isBoolean().withMessage('FilterCatering must be a boolean'),
@@ -55,7 +58,13 @@ router.post('/gmail/imap/messages',
   validate,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { email, appPassword, folder = 'INBOX', limit = 50, filterCatering = false } = req.body;
+      const { 
+        email = process.env.GMAIL_IMAP_EMAIL, 
+        appPassword = process.env.GMAIL_IMAP_APP_PASSWORD, 
+        folder = 'INBOX', 
+        limit = 50, 
+        filterCatering = false 
+      } = req.body;
       
       logger.info(`Fetching messages from ${folder} for: ${email}`);
       
@@ -92,8 +101,8 @@ router.post('/gmail/imap/message/:messageId',
   authenticate,
   strictRateLimiter,
   [
-    body('email').isEmail().withMessage('Valid Gmail address is required'),
-    body('appPassword').isLength({ min: 16, max: 16 }).withMessage('Gmail App Password must be 16 characters'),
+    body('email').optional().isEmail().withMessage('Valid Gmail address is required'),
+    body('appPassword').optional().isLength({ min: 16, max: 16 }).withMessage('Gmail App Password must be 16 characters'),
     body('folder').optional().isString().withMessage('Folder must be a string'),
   ],
   validate,
