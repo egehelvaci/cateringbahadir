@@ -2,7 +2,7 @@ import { ImapFlow } from 'imapflow';
 import { google } from 'googleapis';
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
-import { MailboxType } from '@prisma/client';
+import { MailType } from '@prisma/client';
 import crypto from 'crypto';
 
 export class EmailService {
@@ -81,7 +81,7 @@ export class EmailService {
     }
   }
 
-  private async fetchImapEmails(mailboxType: MailboxType, since?: Date) {
+  private async fetchImapEmails(mailboxType: MailType, since?: Date) {
     const emails = [];
     
     try {
@@ -94,21 +94,25 @@ export class EmailService {
 
       const messages = await this.imapClient!.search(searchCriteria);
       
-      for (const uid of messages) {
-        const message = await this.imapClient!.fetchOne(uid, {
-          envelope: true,
-          bodyParts: true,
-          bodyStructure: true,
-          source: true,
-        });
+      if (Array.isArray(messages)) {
+        for (const uid of messages) {
+          const message = await this.imapClient!.fetchOne(uid, {
+            envelope: true,
+            bodyParts: true,
+            bodyStructure: true,
+            source: true,
+          });
 
-        emails.push({
-          messageId: message.envelope.messageId,
-          from: message.envelope.from?.[0]?.address,
-          subject: message.envelope.subject,
-          receivedAt: message.envelope.date,
-          raw: message.source.toString(),
-        });
+          if (message && message.envelope) {
+            emails.push({
+              messageId: message.envelope.messageId,
+              from: message.envelope.from?.[0]?.address,
+              subject: message.envelope.subject,
+              receivedAt: message.envelope.date,
+              raw: message.source?.toString(),
+            });
+          }
+        }
       }
 
       return emails;
@@ -163,25 +167,26 @@ export class EmailService {
     }
   }
 
-  private async saveEmail(emailData: any, mailboxType: MailboxType) {
+  private async saveEmail(emailData: any, mailType: MailType) {
     try {
-      const dedupHash = crypto
-        .createHash('sha256')
-        .update(`${emailData.messageId}${emailData.from}${emailData.subject}`)
-        .digest('hex');
+      // Check if email already exists by messageId
+      const existingEmail = await prisma.inboundEmail.findFirst({
+        where: { messageId: emailData.messageId },
+      });
 
-      await prisma.inboundEmail.upsert({
-        where: { dedupHash },
-        update: {},
-        create: {
-          mailboxType,
-          provider: this.gmailClient ? 'gmail' : 'imap',
+      if (existingEmail) {
+        return existingEmail;
+      }
+
+      return await prisma.inboundEmail.create({
+        data: {
           messageId: emailData.messageId,
           fromAddr: emailData.from,
           subject: emailData.subject,
           receivedAt: emailData.receivedAt,
           raw: emailData.raw,
-          dedupHash,
+          mailType: mailType,
+          labelIds: [],
         },
       });
 

@@ -1,11 +1,11 @@
 import { prisma } from '../config/database';
 import { AIService } from './ai.service';
 import { logger } from '../utils/logger';
-import { Vessel, Cargo, GearType } from '@prisma/client';
+import { Vessel, Cargo } from '@prisma/client';
 
 interface MatchScore {
-  vesselId: bigint;
-  cargoId: bigint;
+  vesselId: number;
+  cargoId: number;
   score: number;
   reasons: string[];
 }
@@ -17,14 +17,10 @@ export class MatchingService {
     this.aiService = new AIService();
   }
 
-  async findTopMatchesForCargo(cargoId: bigint, limit: number = 3): Promise<MatchScore[]> {
+  async findTopMatchesForCargo(cargoId: number, limit: number = 3): Promise<MatchScore[]> {
     try {
       const cargo = await prisma.cargo.findUnique({
         where: { id: cargoId },
-        include: {
-          loadPort: true,
-          dischargePort: true,
-        },
       });
 
       if (!cargo) {
@@ -55,7 +51,7 @@ export class MatchingService {
     }
   }
 
-  async findTopMatchesForVessel(vesselId: bigint, limit: number = 3): Promise<MatchScore[]> {
+  async findTopMatchesForVessel(vesselId: number, limit: number = 3): Promise<MatchScore[]> {
     try {
       const vessel = await prisma.vessel.findUnique({
         where: { id: vesselId },
@@ -70,10 +66,6 @@ export class MatchingService {
           laycanStart: {
             gte: vessel.availableFrom || undefined,
           },
-        },
-        include: {
-          loadPort: true,
-          dischargePort: true,
         },
       });
 

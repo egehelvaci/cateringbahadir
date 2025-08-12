@@ -150,31 +150,6 @@ export class AIService {
     }
   }
 
-  async findSimilarPorts(portName: string, limit: number = 5) {
-    try {
-      const embedding = await this.generateEmbedding(portName);
-      
-      const ports = await prisma.port.findMany({
-        take: limit,
-      });
-
-      const portsWithScores = await Promise.all(
-        ports.map(async (port) => {
-          const portEmbedding = await this.generateEmbedding(port.name);
-          const similarity = this.cosineSimilarity(embedding, portEmbedding);
-          return { port, similarity };
-        })
-      );
-
-      return portsWithScores
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, limit)
-        .map(item => item.port);
-    } catch (error) {
-      logger.error('Error finding similar ports:', error);
-      return [];
-    }
-  }
 
   private cosineSimilarity(a: number[], b: number[]): number {
     if (a.length !== b.length) return 0;
