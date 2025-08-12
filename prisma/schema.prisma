@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id      BigInt @id @default(autoincrement())
+  name    String
+  users   User[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id         BigInt  @id @default(autoincrement())
+  companyId  BigInt
+  email      String  @unique
+  name       String?
+  password   String
+  company    Company @relation(fields: [companyId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GoogleAccount {
+  id              Int      @id @default(autoincrement())
+  email           String   @unique
+  accessToken     String
+  refreshToken    String
+  scope           String?
+  tokenType       String?  @default("Bearer")
+  expiryDate      BigInt?  // ms epoch
+  historyId       String?  // incremental sync için
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model InboundEmail {
+  id          Int       @id @default(autoincrement())
+  messageId   String?   @unique
+  fromAddr    String?
+  subject     String?
+  receivedAt  DateTime?
+  raw         String?   @db.Text
+  parsedType  MailType?
+  parsedJson  Json?
+  gmailId     String?   // Gmail message id
+  threadId    String?   // Gmail thread id
+  labelIds    Json?     // Gmail labels
+  historyId   String?   // Gmail history id
+  createdAt   DateTime  @default(now())
+}
+
+model Cargo {
+  id            Int       @id @default(autoincrement())
+  commodity     String
+  qtyValue      Float?
+  qtyUnit       String?
+  loadPort      String?
+  dischargePort String?
+  laycanStart   DateTime?
+  laycanEnd     DateTime?
+  notes         String?
+  embedding     Bytes?
+  createdAt     DateTime  @default(now())
+  matches       Match[]
+  
+  @@index([commodity])
+  @@index([laycanStart, laycanEnd])
+}
+
+model Vessel {
+  id            Int       @id @default(autoincrement())
+  name          String?
+  imo           String?
+  dwt           Float?
+  capacityTon   Float?
+  capacityM3    Float?
+  currentArea   String?
+  availableFrom DateTime?
+  gear          String?
+  notes         String?
+  embedding     Bytes?
+  createdAt     DateTime  @default(now())
+  matches       Match[]
+  
+  @@index([availableFrom])
+  @@index([currentArea])
+}
+
+model Match {
+  id         Int         @id @default(autoincrement())
+  cargoId    Int
+  vesselId   Int
+  score      Float
+  reason     Json?
+  status     MatchStatus @default(SUGGESTED)
+  selected   Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+
+  cargo   Cargo  @relation(fields: [cargoId], references: [id])
+  vessel  Vessel @relation(fields: [vesselId], references: [id])
+
+  @@index([cargoId])
+  @@index([vesselId])
+  @@index([status])
+  @@index([score])
+}
+
+enum MailType {
+  CARGO
+  VESSEL
+}
+
+enum MatchStatus {
+  SUGGESTED
+  ACCEPTED
+  REJECTED
+}
