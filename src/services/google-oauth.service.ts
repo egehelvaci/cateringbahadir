@@ -36,13 +36,27 @@ export class GoogleOAuthService {
 
   async exchangeCodeForTokens(code: string): Promise<GoogleTokens> {
     try {
+      logger.info('Exchanging authorization code for tokens', { 
+        codeLength: code.length,
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        redirectUri: process.env.GOOGLE_REDIRECT_URI
+      });
+
       const { tokens } = await this.oauth2Client.getToken(code);
       
+      logger.info('Raw tokens received from Google:', {
+        hasAccessToken: !!tokens.access_token,
+        hasRefreshToken: !!tokens.refresh_token,
+        scope: tokens.scope,
+        tokenType: tokens.token_type,
+        expiryDate: tokens.expiry_date
+      });
+      
       if (!tokens.access_token) {
-        throw new Error('No access token received');
+        throw new Error('No access token received from Google OAuth');
       }
 
-      logger.info('OAuth tokens received successfully');
+      logger.info('OAuth tokens processed successfully');
       
       return {
         access_token: tokens.access_token,
@@ -51,8 +65,14 @@ export class GoogleOAuthService {
         token_type: tokens.token_type || 'Bearer',
         expiry_date: tokens.expiry_date || Date.now() + (3600 * 1000), // 1 hour default
       };
-    } catch (error) {
-      logger.error('Error exchanging code for tokens:', error);
+    } catch (error: any) {
+      logger.error('Error exchanging code for tokens - detailed:', {
+        message: error.message,
+        code: error.code,
+        status: error.status,
+        response: error.response?.data,
+        stack: error.stack
+      });
       throw error;
     }
   }
@@ -151,17 +171,34 @@ export class GoogleOAuthService {
 
   async getUserProfile(accessToken: string): Promise<{ email: string; name?: string }> {
     try {
+      logger.info('Getting user profile with access token', { 
+        tokenLength: accessToken.length,
+        tokenPrefix: accessToken.substring(0, 20) + '...'
+      });
+
       this.oauth2Client.setCredentials({ access_token: accessToken });
       
       const oauth2 = google.oauth2({ version: 'v2', auth: this.oauth2Client });
       const { data } = await oauth2.userinfo.get();
 
+      logger.info('User profile retrieved successfully', {
+        email: data.email,
+        hasName: !!data.name,
+        profileData: { email: data.email, name: data.name }
+      });
+
       return {
         email: data.email!,
         name: data.name || undefined,
       };
-    } catch (error) {
-      logger.error('Error getting user profile:', error);
+    } catch (error: any) {
+      logger.error('Error getting user profile - detailed:', {
+        message: error.message,
+        status: error.status,
+        code: error.code,
+        response: error.response?.data,
+        stack: error.stack
+      });
       throw error;
     }
   }
