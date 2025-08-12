@@ -246,11 +246,12 @@ router.get('/microsoft/status/:email',
       });
 
       if (!account) {
-        return res.json({
+        res.json({
           email: email,
           connected: false,
           message: 'Microsoft account not connected'
         });
+        return;
       }
 
       const isExpired = account.expiryDate < new Date();

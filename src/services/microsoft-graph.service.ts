@@ -1,6 +1,5 @@
 import { ConfidentialClientApplication } from '@azure/msal-node';
 import { Client } from '@microsoft/microsoft-graph-client';
-import { TokenCredentialAuthenticationProvider } from '@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials';
 import { logger } from '../utils/logger';
 import { prisma } from '../config/database';
 
@@ -47,7 +46,7 @@ export class MicrosoftGraphService {
   /**
    * Generate Microsoft OAuth authorization URL
    */
-  generateAuthUrl(state?: string): string {
+  async generateAuthUrl(state?: string): Promise<string> {
     const authCodeUrlParameters = {
       scopes: this.scopes,
       redirectUri: process.env.MICROSOFT_REDIRECT_URI!,
@@ -55,7 +54,7 @@ export class MicrosoftGraphService {
       prompt: 'consent'
     };
 
-    return this.msalApp.getAuthCodeUrl(authCodeUrlParameters);
+    return await this.msalApp.getAuthCodeUrl(authCodeUrlParameters);
   }
 
   /**
@@ -81,7 +80,7 @@ export class MicrosoftGraphService {
 
       return {
         access_token: response.accessToken,
-        refresh_token: response.refreshToken,
+        refresh_token: response.refreshOn ? 'refresh_available' : undefined,
         expires_in: response.expiresOn ? Math.floor((response.expiresOn.getTime() - Date.now()) / 1000) : 3600,
         scope: response.scopes?.join(' ') || this.scopes.join(' ')
       };
@@ -321,7 +320,7 @@ export class MicrosoftGraphService {
         where: { email },
         data: {
           accessToken: response.accessToken,
-          refreshToken: response.refreshToken || refreshToken,
+          refreshToken: response.refreshOn ? 'refresh_available' : refreshToken,
           expiryDate: expiryDate,
           updatedAt: new Date(),
         },

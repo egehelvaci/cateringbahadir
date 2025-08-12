@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { body, query } from 'express-validator';
+import { body } from 'express-validator';
 import { validate } from '../middleware/validation';
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { ImapGmailService } from '../services/imap-gmail.service';
 import { strictRateLimiter } from '../middleware/rateLimiter';

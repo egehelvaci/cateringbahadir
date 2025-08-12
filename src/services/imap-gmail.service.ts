@@ -1,5 +1,5 @@
 const Imap = require('imap');
-import { simpleParser } from 'mailparser';
+const { simpleParser } = require('mailparser');
 import { logger } from '../utils/logger';
 
 interface EmailMessage {
@@ -14,7 +14,7 @@ interface EmailMessage {
 }
 
 export class ImapGmailService {
-  private imap: Imap;
+  private imap: any;
 
   constructor(email: string, appPassword: string) {
     this.imap = new Imap({
@@ -47,7 +47,7 @@ export class ImapGmailService {
 
   async getMessages(folder: string = 'INBOX', limit: number = 50): Promise<EmailMessage[]> {
     return new Promise((resolve, reject) => {
-      this.imap.openBox(folder, true, (err, mailbox) => {
+      this.imap.openBox(folder, true, (err: any, mailbox: any) => {
         if (err) {
           logger.error('Error opening mailbox:', err);
           return reject(err);
@@ -63,7 +63,7 @@ export class ImapGmailService {
           struct: true
         };
 
-        this.imap.search(searchCriteria, (searchErr, uids) => {
+        this.imap.search(searchCriteria, (searchErr: any, uids: any) => {
           if (searchErr) {
             logger.error('Search error:', searchErr);
             return reject(searchErr);
@@ -81,12 +81,12 @@ export class ImapGmailService {
           const messages: EmailMessage[] = [];
           const fetch = this.imap.fetch(latestUids, fetchOptions);
 
-          fetch.on('message', (msg, seqno) => {
+          fetch.on('message', (msg: any, seqno: any) => {
             let emailData: any = {};
 
-            msg.on('body', (stream, info) => {
+            msg.on('body', (stream: any, _info: any) => {
               let buffer = '';
-              stream.on('data', (chunk) => {
+              stream.on('data', (chunk: any) => {
                 buffer += chunk.toString('utf8');
               });
 
@@ -124,7 +124,7 @@ export class ImapGmailService {
             });
           });
 
-          fetch.once('error', (fetchErr) => {
+          fetch.once('error', (fetchErr: any) => {
             logger.error('Fetch error:', fetchErr);
             reject(fetchErr);
           });

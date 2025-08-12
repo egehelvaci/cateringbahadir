@@ -1,4 +1,4 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { body } from 'express-validator';
 import { validate } from '../middleware/validation';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -36,7 +36,7 @@ router.post('/email/upload',
           receivedAt: receivedAt ? new Date(receivedAt) : new Date(),
           raw: `Subject: ${subject}\nFrom: ${from}\nTo: ${to || 'Manual Upload'}\n\n${body}`,
           parsedType: null, // Will be processed later
-          parsedJson: null,
+          parsedJson: undefined,
         }
       });
 
@@ -161,7 +161,7 @@ router.post('/emails/bulk',
               receivedAt: emailData.receivedAt ? new Date(emailData.receivedAt) : new Date(),
               raw: `Subject: ${emailData.subject}\nFrom: ${emailData.from}\nTo: ${emailData.to || 'Bulk Upload'}\n\n${emailData.body}`,
               parsedType: null,
-              parsedJson: null,
+              parsedJson: undefined,
             }
           });
         })
