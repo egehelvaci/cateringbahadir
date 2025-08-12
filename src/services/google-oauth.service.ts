@@ -233,8 +233,7 @@ export class GoogleOAuthService {
     const algorithm = 'aes-256-gcm';
     const secretKey = crypto.scryptSync(process.env.JWT_SECRET!, 'salt', 32);
     
-    const [ivHex, encrypted] = encryptedToken.split(':');
-    const iv = Buffer.from(ivHex, 'hex');
+    const [, encrypted] = encryptedToken.split(':');
     
     const decipher = crypto.createDecipher(algorithm, secretKey);
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');

@@ -1,7 +1,7 @@
 import { prisma } from '../config/database';
 import { AIService } from './ai.service';
 import { logger } from '../utils/logger';
-import { Vessel, Cargo } from '@prisma/client';
+import { Vessel } from '@prisma/client';
 
 interface MatchScore {
   vesselId: number;
@@ -127,16 +127,16 @@ export class MatchingService {
     }
 
     const constraints = cargo.constraints as any;
-    if (constraints?.minGear && vessel.gear === GearType.gearless) {
+    if (constraints?.minGear && vessel.gear === 'gearless') {
       score -= 40;
       reasons.push('Cargo requires geared vessel');
-    } else if (vessel.gear === GearType.geared && constraints?.minGear) {
+    } else if (vessel.gear === 'geared' && constraints?.minGear) {
       score += 15;
       reasons.push('Geared vessel matches requirement');
     }
 
     if (vessel.currentArea && cargo.loadPort) {
-      const areaMatch = await this.checkAreaProximity(vessel.currentArea, cargo.loadPort.name);
+      const areaMatch = await this.checkAreaProximity(vessel.currentArea, cargo.loadPort);
       if (areaMatch) {
         score += 20;
         reasons.push('Vessel in loading area');
@@ -184,7 +184,7 @@ export class MatchingService {
     const commodityLower = commodity.toLowerCase();
 
     if (bulkCommodities.some(c => commodityLower.includes(c))) {
-      if (!vessel.capacityJson || (vessel.capacityJson as any).grain) {
+      if (!vessel.capacityTon || vessel.capacityTon > 0) {
         return 10;
       }
     }
@@ -206,12 +206,11 @@ export class MatchingService {
     return 5;
   }
 
-  async createMatch(vesselId: bigint, cargoId: bigint): Promise<void> {
+  async createMatch(vesselId: number, cargoId: number): Promise<void> {
     try {
       const vessel = await prisma.vessel.findUnique({ where: { id: vesselId } });
       const cargo = await prisma.cargo.findUnique({
         where: { id: cargoId },
-        include: { loadPort: true, dischargePort: true },
       });
 
       if (!vessel || !cargo) {
@@ -226,30 +225,38 @@ export class MatchingService {
         matchScore.score
       );
 
-      await prisma.match.upsert({
+      // Check if match already exists
+      const existingMatch = await prisma.match.findFirst({
         where: {
-          cargoId_vesselId: {
-            cargoId,
-            vesselId,
-          },
-        },
-        update: {
-          score: matchScore.score,
-          reason: { 
-            text: reasonText,
-            details: matchScore.reasons,
-          },
-        },
-        create: {
           cargoId,
           vesselId,
-          score: matchScore.score,
-          reason: {
-            text: reasonText,
-            details: matchScore.reasons,
-          },
         },
       });
+
+      if (existingMatch) {
+        await prisma.match.update({
+          where: { id: existingMatch.id },
+          data: {
+            score: matchScore.score,
+            reason: { 
+              text: reasonText,
+              details: matchScore.reasons,
+            },
+          },
+        });
+      } else {
+        await prisma.match.create({
+          data: {
+            cargoId,
+            vesselId,
+            score: matchScore.score,
+            reason: {
+              text: reasonText,
+              details: matchScore.reasons,
+            },
+          },
+        });
+      }
 
       logger.info(`Match created: Vessel ${vesselId} - Cargo ${cargoId} (Score: ${matchScore.score})`);
     } catch (error) {
