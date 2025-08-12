@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { body } from 'express-validator';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { prisma } from '../config/database';
 import { validate } from '../middleware/validation';
 import { AppError } from '../middleware/errorHandler';
@@ -19,7 +19,7 @@ router.post(
     body('companyName').trim().notEmpty(),
   ],
   validate,
-  async (req, res, next) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email, password, name, companyName } = req.body;
 
@@ -56,7 +56,7 @@ router.post(
       const token = jwt.sign(
         { userId: user.id.toString() },
         process.env.JWT_SECRET!,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as SignOptions
       );
 
       res.status(201).json({
@@ -82,7 +82,7 @@ router.post(
     body('password').notEmpty(),
   ],
   validate,
-  async (req, res, next) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email, password } = req.body;
 
@@ -104,7 +104,7 @@ router.post(
       const token = jwt.sign(
         { userId: user.id.toString() },
         process.env.JWT_SECRET!,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as SignOptions
       );
 
       res.json({

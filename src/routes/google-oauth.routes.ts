@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { query, body } from 'express-validator';
 import { validate } from '../middleware/validation';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -18,7 +18,7 @@ router.get('/auth/google',
   authenticate,
   [query('state').optional().isString()],
   validate,
-  (req: AuthRequest, res, next) => {
+  (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const state = (req.query.state as string) || `user_${req.userId}`;
       const authUrl = googleOAuth.generateAuthUrl(state);
@@ -40,9 +40,9 @@ router.get('/oauth2/callback',
     query('state').optional().isString(),
   ],
   validate,
-  async (req, res, next) => {
+  async (req: Request, res: Response, _: NextFunction) => {
     try {
-      const { code, state } = req.query;
+      const { code } = req.query;
       
       // Exchange authorization code for tokens
       const tokens = await googleOAuth.exchangeCodeForTokens(code as string);
@@ -75,7 +75,7 @@ router.get('/oauth2/callback',
 // List connected Gmail accounts
 router.get('/gmail/accounts',
   authenticate,
-  async (req, res, next) => {
+  async (_: Request, res: Response, next: NextFunction) => {
     try {
       const accounts = await googleOAuth.listAuthorizedAccounts();
       
@@ -97,7 +97,7 @@ router.post('/gmail/pull',
     body('email').isEmail().withMessage('Valid Gmail address is required'),
   ],
   validate,
-  async (req, res, next) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email } = req.body;
       
@@ -129,7 +129,7 @@ router.post('/gmail/pull',
 router.post('/gmail/pull-all',
   strictRateLimiter,
   authenticate,
-  async (req, res, next) => {
+  async (_: Request, res: Response, next: NextFunction) => {
     try {
       const accounts = await googleOAuth.listAuthorizedAccounts();
       
@@ -181,7 +181,7 @@ router.delete('/gmail/revoke',
     body('email').isEmail().withMessage('Valid Gmail address is required'),
   ],
   validate,
-  async (req, res, next) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email } = req.body;
       
@@ -201,7 +201,7 @@ router.delete('/gmail/revoke',
 // Get account status
 router.get('/gmail/status/:email',
   authenticate,
-  async (req, res, next) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email } = req.params;
       
@@ -245,7 +245,7 @@ router.get('/gmail/messages/:email',
     query('includeSpamTrash').optional().isBoolean(),
   ],
   validate,
-  async (req, res, next) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email } = req.params;
       const { maxResults, labelIds, q, includeSpamTrash } = req.query;
@@ -290,7 +290,7 @@ router.get('/gmail/messages/:email',
 // Get specific Gmail message details
 router.get('/gmail/messages/:email/:messageId',
   authenticate,
-  async (req, res, next) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email, messageId } = req.params;
       

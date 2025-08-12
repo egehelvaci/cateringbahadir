@@ -95,7 +95,7 @@ npm run dev
 
 - `npm run dev` - Development server
 - `npm run build` - Production build
-- `npm start` - Production server
+- `npm start` - Production server2
 - `npm test` - Testleri çalıştır
 - `npm run prisma:studio` - Prisma Studio'yu aç
 

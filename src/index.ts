@@ -11,11 +11,6 @@ import { logger } from './utils/logger';
 import { prisma } from './config/database';
 import { GmailPollingService } from './services/gmail-polling.service';
 
-import vesselRoutes from './routes/vessel-v2.routes';
-import cargoRoutes from './routes/cargo-v2.routes';
-import matchRoutes from './routes/match-v2.routes';
-import emailRoutes from './routes/email.routes';
-import extractRoutes from './routes/extract.routes';
 import googleOAuthRoutes from './routes/google-oauth.routes';
 import authRoutes from './routes/auth.routes';
 
@@ -39,11 +34,6 @@ app.get('/health', (_, res) => {
 });
 
 app.use('/api/auth', authRoutes);
-app.use('/api/vessels', vesselRoutes);
-app.use('/api/cargos', cargoRoutes);
-app.use('/api/matches', matchRoutes);
-app.use('/api/emails', emailRoutes);
-app.use('/api/extract', extractRoutes);
 app.use('/api', googleOAuthRoutes);
 
 app.use(errorHandler);

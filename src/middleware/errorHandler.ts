@@ -17,7 +17,7 @@ export const errorHandler = (
   err: Error | AppError,
   req: Request,
   res: Response,
-  next: NextFunction
+  _: NextFunction
 ) => {
   if (err instanceof AppError) {
     logger.error({
