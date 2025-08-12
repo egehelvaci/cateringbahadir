@@ -114,6 +114,43 @@ export class GmailService {
     });
   }
 
+  async getMessageById(email: string, messageId: string): Promise<any> {
+    try {
+      const accessToken = await this.googleOAuth.getValidAccessToken(email);
+      
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+      const response = await gmail.users.messages.get({
+        userId: 'me',
+        id: messageId,
+        format: 'full', // Get full message content including body
+      });
+
+      const message = response.data;
+      const headers = this.extractHeaders(message as GmailMessage);
+      const body = this.extractMessageBody(message as GmailMessage);
+
+      return {
+        id: message.id,
+        threadId: message.threadId,
+        labelIds: message.labelIds,
+        snippet: message.snippet,
+        historyId: message.historyId,
+        internalDate: message.internalDate,
+        headers,
+        body,
+        raw: message.raw,
+        sizeEstimate: message.sizeEstimate,
+      };
+    } catch (error) {
+      logger.error('Error fetching message by ID:', error);
+      throw new Error(`Failed to fetch message: ${error}`);
+    }
+  }
+
   async saveMessagesToDatabase(messages: GmailMessage[], accountEmail: string): Promise<number> {
     let savedCount = 0;
 

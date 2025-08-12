@@ -235,4 +235,86 @@ router.get('/gmail/status/:email',
   }
 );
 
+// List Gmail messages
+router.get('/gmail/messages/:email',
+  authenticate,
+  [
+    query('maxResults').optional().isInt({ min: 1, max: 100 }),
+    query('labelIds').optional().isString(),
+    query('q').optional().isString(),
+    query('includeSpamTrash').optional().isBoolean(),
+  ],
+  validate,
+  async (req, res, next) => {
+    try {
+      const { email } = req.params;
+      const { maxResults, labelIds, q, includeSpamTrash } = req.query;
+      
+      // Check if Gmail account exists
+      const account = await prisma.googleAccount.findUnique({
+        where: { email },
+      });
+      
+      if (!account) {
+        throw new AppError('Gmail account not found. Please authorize Gmail access first.', 404);
+      }
+
+      const options: any = {
+        maxResults: maxResults ? parseInt(maxResults as string) : 20,
+        includeSpamTrash: includeSpamTrash === 'true',
+      };
+
+      if (labelIds) {
+        options.labelIds = (labelIds as string).split(',');
+      }
+
+      if (q) {
+        options.q = q as string;
+      }
+
+      const messages = await gmailService.fetchMessages(email, options);
+      
+      res.json({
+        success: true,
+        email,
+        messages,
+        count: messages.length,
+        fetchedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get specific Gmail message details
+router.get('/gmail/messages/:email/:messageId',
+  authenticate,
+  async (req, res, next) => {
+    try {
+      const { email, messageId } = req.params;
+      
+      // Check if Gmail account exists
+      const account = await prisma.googleAccount.findUnique({
+        where: { email },
+      });
+      
+      if (!account) {
+        throw new AppError('Gmail account not found. Please authorize Gmail access first.', 404);
+      }
+
+      const messageDetail = await gmailService.getMessageById(email, messageId);
+      
+      res.json({
+        success: true,
+        email,
+        message: messageDetail,
+        fetchedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 export default router;

@@ -77,6 +77,15 @@ npm run dev
 - `PATCH /api/matches/:id/status` - Eşleşme durumu güncelle
 - `POST /api/matches/generate` - Yeni eşleşmeler oluştur
 
+### Gmail Integration
+- `GET /api/auth/google` - Gmail OAuth başlatma
+- `GET /api/oauth2/callback` - OAuth callback
+- `POST /api/gmail/pull` - Gmail'den yeni mesajları çek
+- `GET /api/gmail/messages/:email` - Gmail mesajlarını listele
+- `GET /api/gmail/messages/:email/:messageId` - Belirli mesaj detayları
+- `GET /api/gmail/status/:email` - Gmail hesap durumu
+- `DELETE /api/gmail/revoke` - Gmail erişimini iptal et
+
 ### Emails
 - `GET /api/emails` - Email listesi
 - `POST /api/emails/fetch` - Yeni emailleri çek
