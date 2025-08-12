@@ -13,6 +13,9 @@ import { GmailPollingService } from './services/gmail-polling.service';
 
 import googleOAuthRoutes from './routes/google-oauth.routes';
 import authRoutes from './routes/auth.routes';
+import imapGmailRoutes from './routes/imap-gmail.routes';
+import manualEmailRoutes from './routes/manual-email.routes';
+// import microsoftGraphRoutes from './routes/microsoft-graph.routes';
 
 dotenv.config();
 
@@ -35,6 +38,9 @@ app.get('/health', (_, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api', googleOAuthRoutes);
+app.use('/api', manualEmailRoutes);
+app.use('/api', imapGmailRoutes);
+// app.use('/api', microsoftGraphRoutes);
 
 app.use(errorHandler);
 

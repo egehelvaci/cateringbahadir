@@ -123,3 +123,17 @@ enum MatchStatus {
   ACCEPTED
   REJECTED
 }
+
+model MicrosoftAccount {
+  id           BigInt   @id @default(autoincrement())
+  email        String   @unique
+  accessToken  String
+  refreshToken String?
+  scope        String
+  expiryDate   DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([email])
+  @@index([expiryDate])
+}

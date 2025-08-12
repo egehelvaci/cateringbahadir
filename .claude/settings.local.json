@@ -23,7 +23,13 @@
       "Bash(npm run build:*)",
       "Bash(railway variables set:*)",
       "Bash(railway variables:*)",
-      "Bash(railway logs:*)"
+      "Bash(railway logs:*)",
+      "Bash(taskkill:*)",
+      "Bash(railway status:*)",
+      "Bash(railway domain:*)",
+      "Bash(railway run npx prisma studio:*)",
+      "Bash(railway run npx prisma db execute:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }
