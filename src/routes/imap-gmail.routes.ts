@@ -50,18 +50,19 @@ router.post('/gmail/imap/messages',
     body('appPassword').isLength({ min: 16, max: 16 }).withMessage('Gmail App Password must be 16 characters'),
     body('folder').optional().isString().withMessage('Folder must be a string'),
     body('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
+    body('filterCatering').optional().isBoolean().withMessage('FilterCatering must be a boolean'),
   ],
   validate,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { email, appPassword, folder = 'INBOX', limit = 50 } = req.body;
+      const { email, appPassword, folder = 'INBOX', limit = 50, filterCatering = false } = req.body;
       
       logger.info(`Fetching messages from ${folder} for: ${email}`);
       
       const imapService = new ImapGmailService(email, appPassword);
       await imapService.connect();
       
-      const messages = await imapService.getMessages(folder, limit);
+      const messages = await imapService.getMessages(folder, limit, filterCatering);
       await imapService.disconnect();
       
       res.json({
