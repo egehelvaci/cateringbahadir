@@ -61,13 +61,28 @@ router.get('/oauth2/callback',
         connectedAt: new Date().toISOString(),
       });
     } catch (error: any) {
-      logger.error('OAuth callback error:', error);
+      logger.error('OAuth callback error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        code: error.code,
+        response: error.response?.data,
+        status: error.response?.status
+      });
       
       if (error.message?.includes('invalid_grant')) {
         throw new AppError('Authorization code has expired or is invalid', 400);
       }
       
-      throw new AppError('Failed to connect Gmail account', 500);
+      if (error.response?.status === 401) {
+        throw new AppError('Google OAuth authentication failed', 401);
+      }
+      
+      if (error.response?.status === 403) {
+        throw new AppError('Google OAuth access forbidden - check client credentials', 403);
+      }
+      
+      throw new AppError(`Failed to connect Gmail account: ${error.message}`, 500);
     }
   }
 );
