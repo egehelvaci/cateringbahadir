@@ -2,6 +2,8 @@ const Imap = require('imap');
 const { simpleParser } = require('mailparser');
 import { logger } from '../utils/logger';
 import { prisma } from '../config/database';
+import { AIClassificationService } from './ai-classification.service';
+import { MailType } from '@prisma/client';
 
 interface EmailMessage {
   id: string;
@@ -16,6 +18,7 @@ interface EmailMessage {
 
 export class ImapGmailService {
   private imap: any;
+  private aiClassifier: AIClassificationService;
 
   constructor(email: string, appPassword: string) {
     this.imap = new Imap({
@@ -28,6 +31,8 @@ export class ImapGmailService {
         rejectUnauthorized: false
       }
     });
+    
+    this.aiClassifier = new AIClassificationService();
   }
 
   async connect(): Promise<void> {
@@ -268,25 +273,58 @@ export class ImapGmailService {
         });
 
         if (!existing) {
-          await prisma.inboundEmail.create({
+          // Use AI classification to determine email type
+          let aiClassification = null;
+          let emailType: MailType | null = null;
+          
+          if (this.isCateringRelated(message)) {
+            try {
+              aiClassification = await this.aiClassifier.classifyEmail(
+                message.subject,
+                message.body,
+                message.from
+              );
+              
+              emailType = aiClassification.type === 'UNKNOWN' ? null : 
+                         (aiClassification.type === 'CARGO' ? MailType.CARGO : MailType.VESSEL);
+              
+              logger.info(`AI classified email "${message.subject}" as ${aiClassification.type} (confidence: ${aiClassification.confidence})`);
+            } catch (error) {
+              logger.error('AI classification failed, using fallback:', error);
+              emailType = MailType.CARGO; // Default fallback
+            }
+          }
+
+          const savedEmail = await prisma.inboundEmail.create({
             data: {
               messageId: `gmail-${message.id}`,
               fromAddr: message.from,
               subject: message.subject,
               receivedAt: message.date,
               raw: message.body,
-              parsedType: this.isCateringRelated(message) ? 'CARGO' : null,
+              parsedType: emailType,
               parsedJson: {
                 id: message.id,
                 to: message.to,
                 html: message.html,
                 attachments: message.attachments,
-                source: 'gmail-imap'
-              }
+                source: 'gmail-imap',
+                aiClassification: aiClassification ? {
+                  type: aiClassification.type,
+                  confidence: aiClassification.confidence,
+                  reason: aiClassification.reason,
+                  extractedData: aiClassification.extractedData || {}
+                } : null
+              } as any
             }
           });
+
+          // Create corresponding Cargo or Vessel record based on AI classification
+          if (aiClassification && aiClassification.type !== 'UNKNOWN') {
+            await this.createCargoOrVesselRecord(savedEmail.id, aiClassification, message);
+          }
           
-          logger.info(`Saved email to database: ${message.subject}`);
+          logger.info(`Saved email to database: ${message.subject} (Type: ${emailType})`);
         } else {
           logger.debug(`Email already exists in database: ${message.subject}`);
         }
@@ -294,6 +332,91 @@ export class ImapGmailService {
     } catch (error) {
       logger.error('Error saving messages to database:', error);
     }
+  }
+
+  private async createCargoOrVesselRecord(_emailId: number, classification: any, message: any): Promise<void> {
+    try {
+      if (classification.type === 'CARGO') {
+        await prisma.cargo.create({
+          data: {
+            commodity: classification.extractedData?.commodity || 'Unknown',
+            qtyValue: this.parseQuantity(classification.extractedData?.quantity),
+            qtyUnit: this.parseQuantityUnit(classification.extractedData?.quantity),
+            loadPort: classification.extractedData?.loadPort || null,
+            dischargePort: classification.extractedData?.dischargePort || null,
+            laycanStart: this.parseDate(classification.extractedData?.laycan, 'start'),
+            laycanEnd: this.parseDate(classification.extractedData?.laycan, 'end'),
+            notes: `Auto-extracted from email: ${message.subject}\nFrom: ${message.from}\nConfidence: ${classification.confidence}`
+          }
+        });
+        
+        logger.info(`Created Cargo record for email: ${message.subject}`);
+        
+      } else if (classification.type === 'VESSEL') {
+        await prisma.vessel.create({
+          data: {
+            name: classification.extractedData?.vesselName || 'Unknown Vessel',
+            imo: classification.extractedData?.imo || null,
+            dwt: this.parseNumber(classification.extractedData?.dwt),
+            capacityTon: this.parseNumber(classification.extractedData?.capacity),
+            currentArea: classification.extractedData?.currentLocation || null,
+            availableFrom: this.parseDate(classification.extractedData?.availability, 'start'),
+            notes: `Auto-extracted from email: ${message.subject}\nFrom: ${message.from}\nConfidence: ${classification.confidence}`
+          }
+        });
+        
+        logger.info(`Created Vessel record for email: ${message.subject}`);
+      }
+    } catch (error) {
+      logger.error('Error creating cargo/vessel record:', error);
+    }
+  }
+
+  private parseQuantity(quantityStr: string | undefined): number | null {
+    if (!quantityStr) return null;
+    const match = quantityStr.match(/(\d+(?:\.\d+)?)/);
+    return match ? parseFloat(match[1]) : null;
+  }
+
+  private parseQuantityUnit(quantityStr: string | undefined): string | null {
+    if (!quantityStr) return null;
+    const units = ['mt', 'tons', 'tonnes', 'kg', 'lbs'];
+    const unit = units.find(u => quantityStr.toLowerCase().includes(u));
+    return unit || 'mt';
+  }
+
+  private parseNumber(numberStr: string | undefined): number | null {
+    if (!numberStr) return null;
+    const match = numberStr.match(/(\d+(?:\.\d+)?)/);
+    return match ? parseFloat(match[1]) : null;
+  }
+
+  private parseDate(dateStr: string | undefined, type: 'start' | 'end'): Date | null {
+    if (!dateStr) return null;
+    
+    // Simple date parsing - can be enhanced
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    
+    // Look for patterns like "15-20 Sep", "Sept 15-20", etc.
+    const monthMatch = dateStr.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i);
+    const dayMatch = dateStr.match(/(\d{1,2})-(\d{1,2})/);
+    
+    if (monthMatch && dayMatch) {
+      const monthStr = monthMatch[1].toLowerCase();
+      const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+      const month = months.indexOf(monthStr);
+      
+      if (month !== -1) {
+        const startDay = parseInt(dayMatch[1]);
+        const endDay = parseInt(dayMatch[2]);
+        const day = type === 'start' ? startDay : endDay;
+        
+        return new Date(currentYear, month, day);
+      }
+    }
+    
+    return null;
   }
 
   static async testConnection(email: string, appPassword: string): Promise<boolean> {
