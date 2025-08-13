@@ -201,7 +201,7 @@ Respond ONLY with valid JSON:
     }
   }
 
-  async createMatch(cargoId: number, vesselId: number, aiScore?: number): Promise<any> {
+  async createMatch(cargoId: number, vesselId: number, manualScore?: number): Promise<any> {
     try {
       // Get cargo and vessel details
       const [cargo, vessel] = await Promise.all([
@@ -215,11 +215,11 @@ Respond ONLY with valid JSON:
 
       // Analyze match if score not provided
       let matchingResult: MatchingResult;
-      if (aiScore !== undefined) {
+      if (manualScore !== undefined) {
         matchingResult = {
-          score: aiScore,
+          score: manualScore,
           reasons: ['Manual match'],
-          compatibility: aiScore >= 80 ? 'EXCELLENT' : aiScore >= 65 ? 'GOOD' : aiScore >= 50 ? 'FAIR' : 'POOR',
+          compatibility: manualScore >= 80 ? 'EXCELLENT' : manualScore >= 65 ? 'GOOD' : manualScore >= 50 ? 'FAIR' : 'POOR',
           concerns: [],
           recommendations: ['Review match details']
         };
@@ -232,9 +232,9 @@ Respond ONLY with valid JSON:
         data: {
           cargoId,
           vesselId,
-          status: 'PENDING',
-          aiScore: matchingResult.score,
-          aiAnalysis: {
+          status: 'SUGGESTED',
+          score: matchingResult.score,
+          reason: {
             score: matchingResult.score,
             compatibility: matchingResult.compatibility,
             reasons: matchingResult.reasons,

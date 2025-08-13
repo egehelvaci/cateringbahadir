@@ -18,7 +18,7 @@ router.get('/vessels',
     query('maxDwt').optional().isFloat({ min: 0 }).withMessage('Max DWT must be a positive number'),
   ],
   validate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { 
         page = 1, 
@@ -103,7 +103,7 @@ router.get('/vessels',
 // Get specific vessel by ID
 router.get('/vessels/:id',
   authenticate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
       
@@ -119,10 +119,11 @@ router.get('/vessels/:id',
       });
       
       if (!vessel) {
-        return res.status(404).json({
+        res.status(404).json({
           success: false,
           message: 'Vessel not found'
         });
+        return;
       }
       
       res.json({

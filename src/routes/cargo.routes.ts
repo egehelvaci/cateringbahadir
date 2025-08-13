@@ -17,7 +17,7 @@ router.get('/cargo',
     query('dischargePort').optional().isString().withMessage('Discharge port must be a string'),
   ],
   validate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { 
         page = 1, 
@@ -102,7 +102,7 @@ router.get('/cargo',
 // Get specific cargo by ID
 router.get('/cargo/:id',
   authenticate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
       
@@ -118,10 +118,11 @@ router.get('/cargo/:id',
       });
       
       if (!cargo) {
-        return res.status(404).json({
+        res.status(404).json({
           success: false,
           message: 'Cargo not found'
         });
+        return;
       }
       
       res.json({

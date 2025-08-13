@@ -14,11 +14,11 @@ router.get('/matches',
   [
     query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
     query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
-    query('status').optional().isIn(['PENDING', 'CONFIRMED', 'REJECTED']).withMessage('Invalid status'),
+    query('status').optional().isIn(['SUGGESTED', 'ACCEPTED', 'REJECTED']).withMessage('Invalid status'),
     query('minScore').optional().isFloat({ min: 0, max: 100 }).withMessage('Min score must be between 0 and 100'),
   ],
   validate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { 
         page = 1, 
@@ -36,7 +36,7 @@ router.get('/matches',
       }
       
       if (minScore) {
-        where.aiScore = {
+        where.score = {
           gte: Number(minScore)
         };
       }
@@ -44,7 +44,7 @@ router.get('/matches',
       const [matches, total] = await Promise.all([
         prisma.match.findMany({
           where,
-          orderBy: { aiScore: 'desc' },
+          orderBy: { score: 'desc' },
           take: Number(limit),
           skip: offset,
           include: {
@@ -80,15 +80,16 @@ router.post('/matches/find',
     body('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit must be between 1 and 50'),
   ],
   validate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { cargoId, vesselId, limit = 10 } = req.body;
       
       if (!cargoId && !vesselId) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'Either cargoId or vesselId must be provided'
         });
+        return;
       }
       
       const matches = await aiMatchingService.findBestMatches(cargoId, vesselId, Number(limit));
@@ -113,7 +114,7 @@ router.post('/matches',
     body('manualScore').optional().isFloat({ min: 0, max: 100 }).withMessage('Manual score must be between 0 and 100'),
   ],
   validate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { cargoId, vesselId, manualScore } = req.body;
       
@@ -123,10 +124,11 @@ router.post('/matches',
       });
       
       if (existingMatch) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'Match already exists between this cargo and vessel'
         });
+        return;
       }
       
       const match = await aiMatchingService.createMatch(
@@ -154,7 +156,7 @@ router.post('/matches/analyze',
     body('vesselId').isInt().withMessage('Vessel ID is required and must be an integer'),
   ],
   validate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { cargoId, vesselId } = req.body;
       
@@ -164,10 +166,11 @@ router.post('/matches/analyze',
       ]);
       
       if (!cargo || !vessel) {
-        return res.status(404).json({
+        res.status(404).json({
           success: false,
           message: 'Cargo or vessel not found'
         });
+        return;
       }
       
       const analysis = await aiMatchingService.analyzeMatch(cargo, vessel);
@@ -195,17 +198,15 @@ router.patch('/matches/:id',
     body('notes').optional().isString().withMessage('Notes must be a string'),
   ],
   validate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
-      const { status, notes } = req.body;
+      const { status } = req.body;
       
       const match = await prisma.match.update({
         where: { id: Number(id) },
         data: {
-          status,
-          notes: notes || undefined,
-          updatedAt: new Date()
+          status
         },
         include: {
           cargo: true,
@@ -227,7 +228,7 @@ router.patch('/matches/:id',
 // Get specific match details
 router.get('/matches/:id',
   authenticate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
       
@@ -240,10 +241,11 @@ router.get('/matches/:id',
       });
       
       if (!match) {
-        return res.status(404).json({
+        res.status(404).json({
           success: false,
           message: 'Match not found'
         });
+        return;
       }
       
       res.json({
@@ -264,7 +266,7 @@ router.post('/matches/auto',
     body('maxMatches').optional().isInt({ min: 1, max: 20 }).withMessage('Max matches must be between 1 and 20'),
   ],
   validate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { minScore = 70, maxMatches = 10 } = req.body;
       
