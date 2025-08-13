@@ -168,6 +168,84 @@ enum MatchStatus {
   REJECTED
 }
 
+enum OrderStatus {
+  PENDING       // Beklemede
+  CONFIRMED     // Onaylandı
+  READY         // Hazır (tüm QR'lar ilk kez okutuldu)
+  DELIVERED     // Teslim edildi (tüm QR'lar ikinci kez okutuldu)
+  CANCELLED     // İptal edildi
+}
+
+model Order {
+  id          Int           @id @default(autoincrement())
+  orderNumber String        @unique
+  customerName String
+  customerPhone String?
+  totalAmount Float?
+  status      OrderStatus   @default(PENDING)
+  notes       String?
+  items       OrderItem[]
+  qrScans     QRScan[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  @@index([status])
+  @@index([orderNumber])
+}
+
+model OrderItem {
+  id          Int       @id @default(autoincrement())
+  orderId     Int
+  qrCode      String    @unique // Her item'ın benzersiz QR kodu
+  productName String
+  quantity    Int
+  price       Float?
+  firstScanAt DateTime? // İlk okutma zamanı
+  secondScanAt DateTime? // İkinci okutma zamanı
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  qrScans     QRScan[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([orderId])
+  @@index([qrCode])
+}
+
+model QRScan {
+  id          Int       @id @default(autoincrement())
+  orderId     Int
+  orderItemId Int
+  employeeId  Int?      // Okutmayı yapan çalışan
+  qrCode      String
+  scanType    Int       // 1: İlk okutma (hazırlama), 2: İkinci okutma (teslimat)
+  scannedBy   String?   // Kim tarafından okutuldu (eski alan, geriye uyumluluk için)
+  scannedAt   DateTime  @default(now())
+  
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  employee    Employee? @relation(fields: [employeeId], references: [id])
+  
+  @@index([orderId])
+  @@index([orderItemId])
+  @@index([qrCode])
+  @@index([employeeId])
+}
+
+model Employee {
+  id          Int       @id @default(autoincrement())
+  name        String
+  email       String?   @unique
+  phone       String?
+  department  String?   // Hazırlama, Teslimat, vb.
+  isActive    Boolean   @default(true)
+  qrScans     QRScan[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([department])
+  @@index([isActive])
+}
+
 model MicrosoftAccount {
   id           BigInt   @id @default(autoincrement())
   email        String   @unique

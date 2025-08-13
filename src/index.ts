@@ -26,6 +26,8 @@ import analyticsRoutes from './routes/analytics.routes';
 import dashboardRoutes from './routes/dashboard.routes';
 import settingsRoutes from './routes/settings.routes';
 import notificationsRoutes from './routes/notifications.routes';
+import orderRoutes from './routes/order.routes';
+import employeeRoutes from './routes/employee.routes';
 // import microsoftGraphRoutes from './routes/microsoft-graph.routes';
 
 dotenv.config();
@@ -83,6 +85,8 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api', orderRoutes);
+app.use('/api', employeeRoutes);
 // app.use('/api', microsoftGraphRoutes);
 
 app.use(errorHandler);
