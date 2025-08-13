@@ -16,6 +16,9 @@ import googleOAuthRoutes from './routes/google-oauth.routes';
 import authRoutes from './routes/auth.routes';
 import imapGmailRoutes from './routes/imap-gmail.routes';
 import manualEmailRoutes from './routes/manual-email.routes';
+import cargoRoutes from './routes/cargo.routes';
+import vesselRoutes from './routes/vessel.routes';
+import matchingRoutes from './routes/matching.routes';
 // import microsoftGraphRoutes from './routes/microsoft-graph.routes';
 
 dotenv.config();
@@ -41,6 +44,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api', googleOAuthRoutes);
 app.use('/api', manualEmailRoutes);
 app.use('/api', imapGmailRoutes);
+app.use('/api', cargoRoutes);
+app.use('/api', vesselRoutes);
+app.use('/api', matchingRoutes);
 // app.use('/api', microsoftGraphRoutes);
 
 app.use(errorHandler);

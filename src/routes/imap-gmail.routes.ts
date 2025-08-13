@@ -6,6 +6,7 @@ import { AppError } from '../middleware/errorHandler';
 import { ImapGmailService } from '../services/imap-gmail.service';
 import { strictRateLimiter } from '../middleware/rateLimiter';
 import { logger } from '../utils/logger';
+import { prisma } from '../config/database';
 
 const router = Router();
 
@@ -131,6 +132,55 @@ router.post('/gmail/imap/message/:messageId',
         success: true,
         email: email,
         message: message
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get all inbox emails from database
+router.get('/inbox/emails',
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { page = 1, limit = 50, type } = req.query;
+      const offset = (Number(page) - 1) * Number(limit);
+      
+      const where: any = {};
+      if (type && (type === 'CARGO' || type === 'VESSEL')) {
+        where.parsedType = type;
+      }
+      
+      const [emails, total] = await Promise.all([
+        prisma.inboundEmail.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          take: Number(limit),
+          skip: offset,
+          select: {
+            id: true,
+            messageId: true,
+            fromAddr: true,
+            subject: true,
+            receivedAt: true,
+            parsedType: true,
+            parsedJson: true,
+            createdAt: true
+          }
+        }),
+        prisma.inboundEmail.count({ where })
+      ]);
+      
+      res.json({
+        success: true,
+        data: emails,
+        pagination: {
+          page: Number(page),
+          limit: Number(limit),
+          total,
+          totalPages: Math.ceil(total / Number(limit))
+        }
       });
     } catch (error) {
       next(error);
