@@ -19,6 +19,7 @@ import manualEmailRoutes from './routes/manual-email.routes';
 import cargoRoutes from './routes/cargo.routes';
 import vesselRoutes from './routes/vessel.routes';
 import matchingRoutes from './routes/matching.routes';
+import emailProcessingRoutes from './routes/email-processing.routes';
 // import microsoftGraphRoutes from './routes/microsoft-graph.routes';
 
 dotenv.config();
@@ -28,13 +29,41 @@ const PORT = process.env.PORT || 3000;
 
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
-  credentials: true
+  origin: function (origin, callback) {
+    // Development için tüm origin'lere izin ver
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    
+    // Production için belirlenen origin'leri kontrol et
+    const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map(o => o.trim());
+    
+    // Origin yoksa (Postman, mobile app) veya listedeyse izin ver
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    return callback(new Error('CORS policy tarafından engellendi'), false);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Authorization'],
+  optionsSuccessStatus: 200
 }));
 app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(rateLimiter);
+
+// Pre-flight OPTIONS requests için global handler
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
 
 app.get('/health', (_, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
@@ -47,6 +76,7 @@ app.use('/api', imapGmailRoutes);
 app.use('/api', cargoRoutes);
 app.use('/api', vesselRoutes);
 app.use('/api', matchingRoutes);
+app.use('/api/emails', emailProcessingRoutes);
 // app.use('/api', microsoftGraphRoutes);
 
 app.use(errorHandler);

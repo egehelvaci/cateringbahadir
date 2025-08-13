@@ -3,6 +3,7 @@ const { simpleParser } = require('mailparser');
 import { logger } from '../utils/logger';
 import { prisma } from '../config/database';
 import { AIClassificationService } from './ai-classification.service';
+import { OpenAIService } from './openai.service';
 import { MailType } from '@prisma/client';
 
 interface EmailMessage {
@@ -19,6 +20,7 @@ interface EmailMessage {
 export class ImapGmailService {
   private imap: any;
   private aiClassifier: AIClassificationService;
+  private openaiService: OpenAIService;
 
   constructor(email: string, appPassword: string) {
     this.imap = new Imap({
@@ -33,6 +35,7 @@ export class ImapGmailService {
     });
     
     this.aiClassifier = new AIClassificationService();
+    this.openaiService = new OpenAIService();
   }
 
   async connect(): Promise<void> {
@@ -276,6 +279,7 @@ export class ImapGmailService {
           // Use AI classification to determine email type
           let aiClassification = null;
           let emailType: MailType | null = null;
+          let parsedJson = null;
           
           if (this.isCateringRelated(message)) {
             try {
@@ -285,8 +289,25 @@ export class ImapGmailService {
                 message.from
               );
               
-              emailType = aiClassification.type === 'UNKNOWN' ? null : 
-                         (aiClassification.type === 'CARGO' ? MailType.CARGO : MailType.VESSEL);
+              if (aiClassification.type !== 'UNKNOWN' && aiClassification.confidence > 0.6) {
+                emailType = aiClassification.type === 'CARGO' ? MailType.CARGO : MailType.VESSEL;
+                
+                // Extract structured data using OpenAI
+                try {
+                  const extraction = await this.openaiService.extractFromEmail(message.body);
+                  parsedJson = extraction;
+                  
+                  // Save to appropriate table (Cargo or Vessel)
+                  await this.saveToSpecificTable(extraction);
+                  
+                  logger.info(`Successfully classified and saved ${aiClassification.type} from email "${message.subject}"`);
+                } catch (extractError) {
+                  logger.warn(`Failed to extract structured data from email "${message.subject}":`, extractError);
+                  // Continue with just the classification
+                }
+              } else {
+                logger.debug(`Email "${message.subject}" classification uncertain (${aiClassification.type}, confidence: ${aiClassification.confidence})`);
+              }
               
               logger.info(`AI classified email "${message.subject}" as ${aiClassification.type} (confidence: ${aiClassification.confidence})`);
             } catch (error) {
@@ -303,7 +324,7 @@ export class ImapGmailService {
               receivedAt: message.date,
               raw: message.body,
               parsedType: emailType,
-              parsedJson: {
+              parsedJson: parsedJson || {
                 id: message.id,
                 to: message.to,
                 html: message.html,
@@ -417,6 +438,64 @@ export class ImapGmailService {
     }
     
     return null;
+  }
+
+  /**
+   * Save extracted data to specific table (Cargo or Vessel)
+   */
+  private async saveToSpecificTable(extraction: any): Promise<void> {
+    try {
+      if (extraction.type === 'CARGO') {
+        const cargoData = extraction.data;
+
+        // Generate embedding for matching
+        const embeddingText = this.openaiService.generateEmbeddingText('CARGO', cargoData);
+        const embedding = await this.openaiService.generateEmbedding(embeddingText);
+
+        await prisma.cargo.create({
+          data: {
+            commodity: cargoData.commodity,
+            qtyValue: cargoData.qtyValue || null,
+            qtyUnit: cargoData.qtyUnit || null,
+            loadPort: cargoData.loadPort || null,
+            dischargePort: cargoData.dischargePort || null,
+            laycanStart: cargoData.laycanStart ? new Date(cargoData.laycanStart) : null,
+            laycanEnd: cargoData.laycanEnd ? new Date(cargoData.laycanEnd) : null,
+            notes: cargoData.notes || null,
+            embedding: Buffer.from(new Float32Array(embedding).buffer),
+          },
+        });
+
+        logger.info(`Saved cargo: ${cargoData.commodity} from ${cargoData.loadPort} to ${cargoData.dischargePort}`);
+
+      } else if (extraction.type === 'VESSEL') {
+        const vesselData = extraction.data;
+
+        // Generate embedding for matching
+        const embeddingText = this.openaiService.generateEmbeddingText('VESSEL', vesselData);
+        const embedding = await this.openaiService.generateEmbedding(embeddingText);
+
+        await prisma.vessel.create({
+          data: {
+            name: vesselData.name || null,
+            imo: vesselData.imo || null,
+            dwt: vesselData.dwt || null,
+            capacityTon: vesselData.capacityTon || null,
+            capacityM3: vesselData.capacityM3 || null,
+            currentArea: vesselData.currentArea || null,
+            availableFrom: vesselData.availableFrom ? new Date(vesselData.availableFrom) : null,
+            gear: vesselData.gear || null,
+            notes: vesselData.notes || null,
+            embedding: Buffer.from(new Float32Array(embedding).buffer),
+          },
+        });
+
+        logger.info(`Saved vessel: ${vesselData.name || 'Unknown'} (${vesselData.dwt || 'N/A'} DWT) in ${vesselData.currentArea || 'Unknown area'}`);
+      }
+    } catch (error) {
+      logger.error('Error saving to specific table:', error);
+      throw error;
+    }
   }
 
   static async testConnection(email: string, appPassword: string): Promise<boolean> {
