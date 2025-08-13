@@ -240,7 +240,7 @@ Please analyze the route efficiency, time compatibility with cargo laycan, and a
       'los_angeles': 'los_angeles',
       'losangeles': 'los_angeles',
       'jebel_ali': 'jebel_ali',
-      'jebel_ali': 'jebel_ali',
+      'jebelali': 'jebel_ali',
       'bandar_abbas': 'bandar_abbas',
       'cape_town': 'cape_town',
       'capetown': 'cape_town'
@@ -350,7 +350,7 @@ Please analyze the route efficiency, time compatibility with cargo laycan, and a
     return 5000; // Default fallback
   }
 
-  private calculateAlternativeRoutes(fromPort: string, toPort: string, primaryRoute: Route): AlternativeRoute[] {
+  private calculateAlternativeRoutes(_fromPort: string, _toPort: string, primaryRoute: Route): AlternativeRoute[] {
     const alternatives: AlternativeRoute[] = [];
     
     // Cape of Good Hope alternative for Suez routes

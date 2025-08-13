@@ -1,7 +1,6 @@
 import { prisma } from '../config/database';
 import { OpenAIService } from './openai.service';
 import { MatchingV2Service } from './matching-v2.service';
-import { MaritimeRoutingService } from './maritime-routing.service';
 import { logger } from '../utils/logger';
 
 interface AIMatchAnalysis {
@@ -26,12 +25,10 @@ interface AIMatchAnalysis {
 export class AIMatchingService {
   private openaiService: OpenAIService;
   private matchingV2Service: MatchingV2Service;
-  private maritimeRoutingService: MaritimeRoutingService;
 
   constructor() {
     this.openaiService = new OpenAIService();
     this.matchingV2Service = new MatchingV2Service();
-    this.maritimeRoutingService = new MaritimeRoutingService();
   }
 
   /**
@@ -339,6 +336,86 @@ Assign scores 0-100 for each category and overall compatibility.
     } catch (error) {
       logger.error('Error in batch reanalysis:', error);
       return { processed: 0, enhanced: 0 };
+    }
+  }
+
+  /**
+   * Find best matches for cargo or vessel
+   */
+  async findBestMatches(cargoId?: number, vesselId?: number, limit: number = 10): Promise<any[]> {
+    try {
+      if (cargoId) {
+        return await this.matchingV2Service.findTopMatchesForCargo(cargoId, limit);
+      } else if (vesselId) {
+        return await this.matchingV2Service.findTopMatchesForVessel(vesselId, limit);
+      } else {
+        // Return general best matches
+        return await prisma.match.findMany({
+          where: { status: 'SUGGESTED' },
+          orderBy: { score: 'desc' },
+          take: limit,
+          include: {
+            cargo: true,
+            vessel: true
+          }
+        });
+      }
+    } catch (error) {
+      logger.error('Error finding best matches:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Create a new match between cargo and vessel
+   */
+  async createMatch(cargoId: number, vesselId: number, score?: number, reason?: any): Promise<any> {
+    try {
+      // If no score provided, calculate it
+      let finalScore = score;
+      if (finalScore === undefined) {
+        const [cargo, vessel] = await Promise.all([
+          prisma.cargo.findUnique({ where: { id: cargoId } }),
+          prisma.vessel.findUnique({ where: { id: vesselId } })
+        ]);
+        
+        if (cargo && vessel) {
+          const analysis = await this.performAIAnalysis(cargo, vessel);
+          finalScore = analysis.compatibility;
+          reason = reason || analysis.reasoning;
+        } else {
+          finalScore = 50; // Default score
+        }
+      }
+
+      return await prisma.match.create({
+        data: {
+          cargoId,
+          vesselId,
+          score: finalScore,
+          reason: reason as any,
+          status: 'SUGGESTED'
+        },
+        include: {
+          cargo: true,
+          vessel: true
+        }
+      });
+    } catch (error) {
+      logger.error('Error creating match:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Analyze match compatibility between cargo and vessel
+   */
+  async analyzeMatch(cargo: any, vessel: any): Promise<AIMatchAnalysis> {
+    try {
+      return await this.performAIAnalysis(cargo, vessel);
+    } catch (error) {
+      logger.error('Error analyzing match:', error);
+      throw error;
     }
   }
 

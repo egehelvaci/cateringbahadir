@@ -185,13 +185,38 @@ For VESSEL:
   }
 }
 
+VESSEL Classification Guide:
+- "Need X dwt for..." = VESSEL seeking cargo
+- "Vessel available..." = VESSEL offering services
+- DWT mentions = usually VESSEL specifications
+- "TC" / "Time Charter" = VESSEL charter terms
+- Container specifications (20-40f cntnrs) = VESSEL cargo capacity
+- Port positions/locations = VESSEL current position
+- Daily rates (USD per day) = VESSEL charter rates
+
+CARGO Classification Guide:
+- "Cargo available..." = CARGO seeking transport
+- "Shipment of..." = CARGO description
+- "Loading from X to Y" = CARGO route
+- Commodity names = CARGO type
+
+Extraction Tips for VESSEL:
+- Extract DWT from patterns like "2.500 dwt", "Need 2500 DWT"
+- Look for vessel names (MV, MT, SS prefixes)
+- Container capacity from "20-40f cntnrs", "TEU", "FEU"
+- Current location from port names, areas mentioned
+- Charter terms like "TC", "voyage", "time charter"
+- Availability dates from "available from", "ready", "open"
+
 Rules:
 1. Return ONLY valid JSON matching the schema
 2. Extract ONE type only (CARGO or VESSEL) - choose the primary subject
 3. Include only fields with actual values from the email
 4. Dates must be YYYY-MM-DD format
 5. Numbers should be numeric values, not strings
-6. If uncertain about a field, omit it rather than guess`;
+6. If uncertain about a field, omit it rather than guess
+7. For VESSEL emails, try to extract as much technical data as possible
+8. Look for abbreviations: vsl=vessel, dwt=deadweight tonnage, cntnr=container`;
   }
 
   private normalizeDate(dateStr: string): string {
