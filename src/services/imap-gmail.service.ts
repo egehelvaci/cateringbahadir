@@ -4,6 +4,7 @@ import { logger } from '../utils/logger';
 import { prisma } from '../config/database';
 import { AIClassificationService } from './ai-classification.service';
 import { OpenAIService } from './openai.service';
+import { AIMatchingService } from './ai-matching.service';
 import { MailType } from '@prisma/client';
 
 interface EmailMessage {
@@ -21,6 +22,7 @@ export class ImapGmailService {
   private imap: any;
   private aiClassifier: AIClassificationService;
   private openaiService: OpenAIService;
+  private aiMatchingService: AIMatchingService;
 
   constructor(email: string, appPassword: string) {
     this.imap = new Imap({
@@ -36,6 +38,7 @@ export class ImapGmailService {
     
     this.aiClassifier = new AIClassificationService();
     this.openaiService = new OpenAIService();
+    this.aiMatchingService = new AIMatchingService();
   }
 
   async connect(): Promise<void> {
@@ -289,7 +292,7 @@ export class ImapGmailService {
                 message.from
               );
               
-              if (aiClassification.type !== 'UNKNOWN' && aiClassification.confidence > 0.3) {
+              if (aiClassification.type !== 'UNKNOWN' && aiClassification.confidence > 0.25) {
                 emailType = aiClassification.type === 'CARGO' ? MailType.CARGO : MailType.VESSEL;
                 
                 // Extract structured data using OpenAI
@@ -452,7 +455,7 @@ export class ImapGmailService {
         const embeddingText = this.openaiService.generateEmbeddingText('CARGO', cargoData);
         const embedding = await this.openaiService.generateEmbedding(embeddingText);
 
-        await prisma.cargo.create({
+        const savedCargo = await prisma.cargo.create({
           data: {
             commodity: cargoData.commodity,
             qtyValue: cargoData.qtyValue || null,
@@ -467,6 +470,12 @@ export class ImapGmailService {
         });
 
         logger.info(`Saved cargo: ${cargoData.commodity} from ${cargoData.loadPort} to ${cargoData.dischargePort}`);
+        
+        // 🚀 Otomatik matching başlat
+        setImmediate(() => {
+          this.aiMatchingService.triggerMatchingForNewCargo(savedCargo.id)
+            .catch(error => logger.error('Auto-matching failed for cargo:', error));
+        });
 
       } else if (extraction.type === 'VESSEL') {
         const vesselData = extraction.data;
@@ -475,7 +484,7 @@ export class ImapGmailService {
         const embeddingText = this.openaiService.generateEmbeddingText('VESSEL', vesselData);
         const embedding = await this.openaiService.generateEmbedding(embeddingText);
 
-        await prisma.vessel.create({
+        const savedVessel = await prisma.vessel.create({
           data: {
             name: vesselData.name || null,
             imo: vesselData.imo || null,
@@ -491,6 +500,12 @@ export class ImapGmailService {
         });
 
         logger.info(`Saved vessel: ${vesselData.name || 'Unknown'} (${vesselData.dwt || 'N/A'} DWT) in ${vesselData.currentArea || 'Unknown area'}`);
+        
+        // 🚀 Otomatik matching başlat
+        setImmediate(() => {
+          this.aiMatchingService.triggerMatchingForNewVessel(savedVessel.id)
+            .catch(error => logger.error('Auto-matching failed for vessel:', error));
+        });
       }
     } catch (error) {
       logger.error('Error saving to specific table:', error);

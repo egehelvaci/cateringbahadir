@@ -311,4 +311,263 @@ router.post('/matches/auto',
   }
 );
 
+// AI-Enhanced Matching Endpoints
+
+// POST /matches/reanalyze - Tüm pending match'leri AI ile yeniden analiz et
+router.post('/matches/reanalyze',
+  authenticate,
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await aiMatchingService.reanalyzePendingMatches();
+      
+      res.json({
+        success: true,
+        data: result,
+        message: `Reanalyzed ${result.processed} matches, ${result.enhanced} enhanced`,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /matches/quality-metrics - Matching kalitesi metrikleri
+router.get('/matches/quality-metrics',
+  authenticate,
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const metrics = await aiMatchingService.getMatchQualityMetrics();
+      
+      res.json({
+        success: true,
+        data: metrics,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /matches/:id/ai-analysis - Specific match'in AI analizi
+router.get('/matches/:id/ai-analysis',
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const matchId = parseInt(req.params.id);
+      
+      const match = await prisma.match.findUnique({
+        where: { id: matchId },
+        include: {
+          cargo: true,
+          vessel: true
+        }
+      });
+      
+      if (!match) {
+        res.status(404).json({
+          success: false,
+          message: 'Match not found'
+        });
+        return;
+      }
+      
+      // Extract AI analysis from reason field
+      const aiAnalysis = (match.reason as any)?.aiAnalysis;
+      
+      if (!aiAnalysis) {
+        res.status(404).json({
+          success: false,
+          message: 'AI analysis not available for this match'
+        });
+        return;
+      }
+      
+      res.json({
+        success: true,
+        data: {
+          matchId: match.id,
+          score: match.score,
+          status: match.status,
+          aiAnalysis,
+          cargo: {
+            id: match.cargo.id,
+            commodity: match.cargo.commodity,
+            loadPort: match.cargo.loadPort,
+            dischargePort: match.cargo.dischargePort
+          },
+          vessel: {
+            id: match.vessel.id,
+            name: match.vessel.name,
+            dwt: match.vessel.dwt,
+            currentArea: match.vessel.currentArea
+          }
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /matches/trigger-auto/:type/:id - Manuel olarak otomatik matching tetikle
+router.post('/matches/trigger-auto/:type/:id',
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { type, id } = req.params;
+      const recordId = parseInt(id);
+      
+      if (!['cargo', 'vessel'].includes(type)) {
+        res.status(400).json({
+          success: false,
+          message: 'Type must be "cargo" or "vessel"'
+        });
+        return;
+      }
+      
+      if (type === 'cargo') {
+        await aiMatchingService.triggerMatchingForNewCargo(recordId);
+      } else {
+        await aiMatchingService.triggerMatchingForNewVessel(recordId);
+      }
+      
+      res.json({
+        success: true,
+        message: `Automatic matching triggered for ${type} ${recordId}`,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /matches/enhanced - AI-enhanced match listesi
+router.get('/matches/enhanced',
+  authenticate,
+  [
+    query('page').optional().isInt({ min: 1 }),
+    query('limit').optional().isInt({ min: 1, max: 100 }),
+    query('minCompatibility').optional().isInt({ min: 0, max: 100 }),
+    query('hasAI').optional().isBoolean()
+  ],
+  validate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { 
+        page = 1, 
+        limit = 20, 
+        minCompatibility = 0,
+        hasAI = 'true'
+      } = req.query;
+      
+      const offset = (Number(page) - 1) * Number(limit);
+      
+      // Build where clause
+      const where: any = {};
+      
+      if (hasAI === 'true') {
+        where.reason = {
+          path: ['aiAnalysis'],
+          not: null
+        };
+      }
+      
+      const matches = await prisma.match.findMany({
+        where,
+        include: {
+          cargo: {
+            select: {
+              id: true,
+              commodity: true,
+              qtyValue: true,
+              qtyUnit: true,
+              loadPort: true,
+              dischargePort: true,
+              laycanStart: true,
+              laycanEnd: true
+            }
+          },
+          vessel: {
+            select: {
+              id: true,
+              name: true,
+              dwt: true,
+              currentArea: true,
+              availableFrom: true,
+              gear: true
+            }
+          }
+        },
+        orderBy: [
+          { score: 'desc' },
+          { createdAt: 'desc' }
+        ],
+        skip: offset,
+        take: Number(limit)
+      });
+      
+      // Filter by AI compatibility if specified
+      const filteredMatches = matches.filter(match => {
+        const aiAnalysis = (match.reason as any)?.aiAnalysis;
+        if (!aiAnalysis) return hasAI !== 'true';
+        return aiAnalysis.compatibility >= Number(minCompatibility);
+      });
+      
+      // Format enhanced matches
+      const enhancedMatches = filteredMatches.map(match => {
+        const aiAnalysis = (match.reason as any)?.aiAnalysis;
+        
+        return {
+          id: match.id,
+          score: match.score,
+          status: match.status,
+          createdAt: match.createdAt,
+          cargo: match.cargo,
+          vessel: match.vessel,
+          aiEnhanced: !!aiAnalysis,
+          aiCompatibility: aiAnalysis?.compatibility || null,
+          aiRecommendations: aiAnalysis?.recommendations || [],
+          aiRisks: aiAnalysis?.risks || [],
+          summary: {
+            route: `${match.cargo.loadPort || 'Unknown'} → ${match.cargo.dischargePort || 'Unknown'}`,
+            commodity: match.cargo.commodity,
+            vessel: match.vessel.name || 'Unknown',
+            utilization: match.cargo.qtyValue && match.vessel.dwt ? 
+              Math.round((match.cargo.qtyValue / match.vessel.dwt) * 100) + '%' : 'Unknown'
+          }
+        };
+      });
+      
+      const totalCount = await prisma.match.count({ where });
+      const totalPages = Math.ceil(totalCount / Number(limit));
+      
+      res.json({
+        success: true,
+        data: {
+          matches: enhancedMatches,
+          pagination: {
+            page: Number(page),
+            limit: Number(limit),
+            totalCount,
+            totalPages,
+            hasNext: Number(page) < totalPages,
+            hasPrev: Number(page) > 1
+          },
+          filters: {
+            minCompatibility: Number(minCompatibility),
+            hasAI: hasAI === 'true'
+          }
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 export default router;

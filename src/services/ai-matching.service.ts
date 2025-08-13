@@ -1,89 +1,135 @@
-import OpenAI from 'openai';
-import { logger } from '../utils/logger';
 import { prisma } from '../config/database';
+import { OpenAIService } from './openai.service';
+import { MatchingV2Service } from './matching-v2.service';
+import { MaritimeRoutingService } from './maritime-routing.service';
+import { logger } from '../utils/logger';
 
-interface MatchingResult {
-  score: number; // 0-100 percentage match
-  reasons: string[];
-  compatibility: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR';
-  concerns: string[];
+interface AIMatchAnalysis {
+  compatibility: number; // 0-100
+  reasoning: string;
+  locationAnalysis: {
+    score: number;
+    explanation: string;
+  };
+  timingAnalysis: {
+    score: number;
+    explanation: string;
+  };
+  cargoAnalysis: {
+    score: number;
+    explanation: string;
+  };
   recommendations: string[];
-}
-
-interface CargoVesselPair {
-  cargo: any;
-  vessel: any;
-  matching: MatchingResult;
+  risks: string[];
 }
 
 export class AIMatchingService {
-  private openai: OpenAI;
+  private openaiService: OpenAIService;
+  private matchingV2Service: MatchingV2Service;
+  private maritimeRoutingService: MaritimeRoutingService;
 
   constructor() {
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    this.openaiService = new OpenAIService();
+    this.matchingV2Service = new MatchingV2Service();
+    this.maritimeRoutingService = new MaritimeRoutingService();
   }
 
-  async analyzeMatch(cargo: any, vessel: any): Promise<MatchingResult> {
+  /**
+   * Yeni cargo eklendiğinde otomatik matching başlat
+   */
+  async triggerMatchingForNewCargo(cargoId: number): Promise<void> {
     try {
-      const prompt = `
-Analyze this cargo-vessel matching for maritime shipping:
+      logger.info(`Starting automatic matching for new cargo ${cargoId}`);
+      
+      // Önce mevcut algoritma ile match'ler bul
+      const algorithmicMatches = await this.matchingV2Service.findTopMatchesForCargo(cargoId, 5);
+      
+      // Her match için AI analizi yap
+      for (const match of algorithmicMatches) {
+        if (match.score > 30) { // Sadece threshold üzeri match'leri analiz et
+          await this.enhanceMatchWithAI(match.cargoId, match.vesselId);
+        }
+      }
+      
+      // En iyi match'leri kullanıcıya bildir
+      await this.notifyBestMatches(cargoId, algorithmicMatches);
+      
+    } catch (error) {
+      logger.error(`Error in automatic matching for cargo ${cargoId}:`, error);
+    }
+  }
 
-CARGO DETAILS:
-- Commodity: ${cargo.commodity || 'Unknown'}
-- Quantity: ${cargo.qtyValue || 'Unknown'} ${cargo.qtyUnit || ''}
-- Load Port: ${cargo.loadPort || 'Unknown'}
-- Discharge Port: ${cargo.dischargePort || 'Unknown'}
-- Laycan: ${cargo.laycanStart || 'Unknown'} to ${cargo.laycanEnd || 'Unknown'}
-- Notes: ${cargo.notes || 'None'}
+  /**
+   * Yeni vessel eklendiğinde otomatik matching başlat
+   */
+  async triggerMatchingForNewVessel(vesselId: number): Promise<void> {
+    try {
+      logger.info(`Starting automatic matching for new vessel ${vesselId}`);
+      
+      // Önce mevcut algoritma ile match'ler bul
+      const algorithmicMatches = await this.matchingV2Service.findTopMatchesForVessel(vesselId, 5);
+      
+      // Her match için AI analizi yap
+      for (const match of algorithmicMatches) {
+        if (match.score > 30) {
+          await this.enhanceMatchWithAI(match.cargoId, match.vesselId);
+        }
+      }
+      
+      // En iyi match'leri kullanıcıya bildir
+      await this.notifyBestMatches(vesselId, algorithmicMatches, 'vessel');
+      
+    } catch (error) {
+      logger.error(`Error in automatic matching for vessel ${vesselId}:`, error);
+    }
+  }
 
-VESSEL DETAILS:
-- Name: ${vessel.name || 'Unknown'}
-- DWT: ${vessel.dwt || 'Unknown'}
-- Capacity: ${vessel.capacityTon || 'Unknown'} tons
-- Current Area: ${vessel.currentArea || 'Unknown'}
-- Available From: ${vessel.availableFrom || 'Unknown'}
-- Notes: ${vessel.notes || 'None'}
+  /**
+   * GPT ile match analizi yap ve mevcut match'i geliştir
+   */
+  private async enhanceMatchWithAI(cargoId: number, vesselId: number): Promise<void> {
+    try {
+      const [cargo, vessel] = await Promise.all([
+        prisma.cargo.findUnique({ where: { id: cargoId } }),
+        prisma.vessel.findUnique({ where: { id: vesselId } })
+      ]);
 
-Analyze the compatibility based on:
-1. Cargo size vs vessel capacity
-2. Geographic positioning (ports vs vessel location)
-3. Timing compatibility (laycan vs availability)
-4. Vessel type suitability for commodity
-5. Economic viability
+      if (!cargo || !vessel) {
+        logger.warn(`Missing cargo ${cargoId} or vessel ${vesselId} for AI analysis`);
+        return;
+      }
 
-Provide a detailed analysis with:
-- Match score (0-100%)
-- Compatibility level
-- Positive matching factors
-- Concerns or limitations
-- Recommendations for improvement
+      const aiAnalysis = await this.performAIAnalysis(cargo, vessel);
+      
+      // Mevcut match'i AI analizi ile güncelle
+      await this.updateMatchWithAIAnalysis(cargoId, vesselId, aiAnalysis);
+      
+    } catch (error) {
+      logger.error(`Error enhancing match with AI for cargo ${cargoId}, vessel ${vesselId}:`, error);
+    }
+  }
 
-Respond ONLY with valid JSON:
-{
-  "score": 85,
-  "reasons": ["Good capacity match", "Vessel available in time"],
-  "compatibility": "EXCELLENT" | "GOOD" | "FAIR" | "POOR",
-  "concerns": ["Distance from load port"],
-  "recommendations": ["Consider ballast costs", "Confirm vessel specifications"]
-}
-`;
-
-      const response = await this.openai.chat.completions.create({
+  /**
+   * GPT ile detaylı match analizi yap
+   */
+  private async performAIAnalysis(cargo: any, vessel: any): Promise<AIMatchAnalysis> {
+    try {
+      const prompt = this.buildAnalysisPrompt(cargo, vessel);
+      
+      const response = await this.openaiService['client'].chat.completions.create({
         model: process.env.OPENAI_EXTRACT_MODEL || 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: 'You are an expert maritime shipping analyst specializing in cargo-vessel matching. Analyze compatibility factors and provide detailed matching scores with practical recommendations.'
+            content: 'You are an expert maritime broker analyzing cargo-vessel compatibility. Provide detailed analysis focusing on location, timing, and cargo compatibility. Always respond with valid JSON only.'
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        temperature: parseFloat(process.env.EXTRACTION_TEMPERATURE || '0.1'),
-        max_tokens: 800
+        temperature: 0.3,
+        max_tokens: 1000
       });
 
       const content = response.choices[0]?.message?.content;
@@ -91,171 +137,273 @@ Respond ONLY with valid JSON:
         throw new Error('No response from OpenAI');
       }
 
-      const result: MatchingResult = JSON.parse(content);
+      const analysis: AIMatchAnalysis = JSON.parse(content);
       
-      logger.info(`AI analyzed cargo-vessel match: ${cargo.commodity} on ${vessel.name} - Score: ${result.score}%`);
-      
-      return result;
+      // Validate and sanitize response
+      return {
+        compatibility: Math.max(0, Math.min(100, analysis.compatibility || 0)),
+        reasoning: analysis.reasoning || 'No reasoning provided',
+        locationAnalysis: analysis.locationAnalysis || { score: 0, explanation: 'No analysis' },
+        timingAnalysis: analysis.timingAnalysis || { score: 0, explanation: 'No analysis' },
+        cargoAnalysis: analysis.cargoAnalysis || { score: 0, explanation: 'No analysis' },
+        recommendations: analysis.recommendations || [],
+        risks: analysis.risks || []
+      };
 
     } catch (error) {
-      logger.error('AI matching analysis error:', error);
+      logger.error('Error performing AI analysis:', error);
       
-      // Fallback to simple rule-based matching
-      return this.fallbackMatching(cargo, vessel);
+      // Fallback analysis
+      return {
+        compatibility: 50,
+        reasoning: 'AI analysis failed, using basic compatibility assessment',
+        locationAnalysis: { score: 50, explanation: 'Unable to analyze location compatibility' },
+        timingAnalysis: { score: 50, explanation: 'Unable to analyze timing compatibility' },
+        cargoAnalysis: { score: 50, explanation: 'Unable to analyze cargo compatibility' },
+        recommendations: ['Manual review recommended due to AI analysis failure'],
+        risks: ['AI analysis unavailable - verify manually']
+      };
     }
   }
 
-  private fallbackMatching(cargo: any, vessel: any): MatchingResult {
-    let score = 50; // Base score
-    const reasons: string[] = [];
-    const concerns: string[] = [];
-    const recommendations: string[] = [];
+  private buildAnalysisPrompt(cargo: any, vessel: any): string {
+    return `
+Analyze the compatibility between this cargo and vessel for maritime shipping:
 
-    // Basic capacity check
-    if (cargo.qtyValue && vessel.capacityTon) {
-      const utilization = (cargo.qtyValue / vessel.capacityTon) * 100;
-      if (utilization >= 70 && utilization <= 100) {
-        score += 20;
-        reasons.push('Good capacity utilization');
-      } else if (utilization < 50) {
-        score -= 10;
-        concerns.push('Low capacity utilization');
-      } else if (utilization > 100) {
-        score -= 30;
-        concerns.push('Cargo exceeds vessel capacity');
-      }
-    }
+CARGO DETAILS:
+- Commodity: ${cargo.commodity}
+- Quantity: ${cargo.qtyValue} ${cargo.qtyUnit || 'units'}
+- Load Port: ${cargo.loadPort || 'Not specified'}
+- Discharge Port: ${cargo.dischargePort || 'Not specified'}
+- Laycan: ${cargo.laycanStart ? new Date(cargo.laycanStart).toISOString().split('T')[0] : 'Not specified'} to ${cargo.laycanEnd ? new Date(cargo.laycanEnd).toISOString().split('T')[0] : 'Not specified'}
+- Notes: ${cargo.notes || 'None'}
 
-    // Geographic proximity (basic check)
-    if (cargo.loadPort && vessel.currentArea) {
-      if (cargo.loadPort.toLowerCase().includes(vessel.currentArea.toLowerCase()) ||
-          vessel.currentArea.toLowerCase().includes(cargo.loadPort.toLowerCase())) {
-        score += 15;
-        reasons.push('Vessel in proximity to load port');
-      } else {
-        score -= 5;
-        concerns.push('Vessel may be distant from load port');
-      }
-    }
+VESSEL DETAILS:
+- Name: ${vessel.name || 'Not specified'}
+- DWT: ${vessel.dwt || 'Not specified'}
+- Capacity (Tons): ${vessel.capacityTon || 'Not specified'}
+- Capacity (M3): ${vessel.capacityM3 || 'Not specified'}
+- Current Area: ${vessel.currentArea || 'Not specified'}
+- Available From: ${vessel.availableFrom ? new Date(vessel.availableFrom).toISOString().split('T')[0] : 'Not specified'}
+- Gear: ${vessel.gear || 'Not specified'}
+- Notes: ${vessel.notes || 'None'}
 
-    // Determine compatibility level
-    let compatibility: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR';
-    if (score >= 80) compatibility = 'EXCELLENT';
-    else if (score >= 65) compatibility = 'GOOD';
-    else if (score >= 50) compatibility = 'FAIR';
-    else compatibility = 'POOR';
+Provide analysis in this exact JSON format:
+{
+  "compatibility": 85,
+  "reasoning": "Excellent match with optimal timing and location compatibility",
+  "locationAnalysis": {
+    "score": 90,
+    "explanation": "Vessel currently in Mediterranean, ideal for loading from Italian port"
+  },
+  "timingAnalysis": {
+    "score": 85,
+    "explanation": "Vessel available 3 days before laycan start, perfect timing"
+  },
+  "cargoAnalysis": {
+    "score": 80,
+    "explanation": "Cargo utilizes 75% of vessel capacity, optimal loading"
+  },
+  "recommendations": [
+    "Proceed with fixture negotiations",
+    "Confirm exact vessel position",
+    "Verify gear requirements"
+  ],
+  "risks": [
+    "Weather delays possible in winter season",
+    "Port congestion in discharge port"
+  ]
+}
 
-    recommendations.push('Verify vessel specifications');
-    recommendations.push('Confirm loading/discharge arrangements');
-    recommendations.push('Calculate ballast and positioning costs');
+Consider:
+1. Location compatibility (vessel position vs load/discharge ports)
+2. Timing (vessel availability vs laycan dates)
+3. Cargo compatibility (size, type, special requirements)
+4. Efficiency (utilization rates, distance optimization)
+5. Market conditions and practical considerations
 
-    return {
-      score: Math.max(0, Math.min(100, score)),
-      reasons,
-      compatibility,
-      concerns,
-      recommendations
-    };
+Assign scores 0-100 for each category and overall compatibility.
+`;
   }
 
-  async findBestMatches(cargoId?: number, vesselId?: number, limit: number = 10): Promise<CargoVesselPair[]> {
+  /**
+   * Match'i AI analizi ile güncelle
+   */
+  private async updateMatchWithAIAnalysis(cargoId: number, vesselId: number, aiAnalysis: AIMatchAnalysis): Promise<void> {
     try {
-      let cargos: any[] = [];
-      let vessels: any[] = [];
+      const existingMatch = await prisma.match.findFirst({
+        where: { cargoId, vesselId }
+      });
 
-      if (cargoId) {
-        // Find matches for specific cargo
-        const cargo = await prisma.cargo.findUnique({ where: { id: cargoId } });
-        if (!cargo) throw new Error('Cargo not found');
-        cargos = [cargo];
-        vessels = await prisma.vessel.findMany({ take: 20, orderBy: { createdAt: 'desc' } });
-      } else if (vesselId) {
-        // Find matches for specific vessel
-        const vessel = await prisma.vessel.findUnique({ where: { id: vesselId } });
-        if (!vessel) throw new Error('Vessel not found');
-        vessels = [vessel];
-        cargos = await prisma.cargo.findMany({ take: 20, orderBy: { createdAt: 'desc' } });
-      } else {
-        // Find best overall matches
-        cargos = await prisma.cargo.findMany({ take: 10, orderBy: { createdAt: 'desc' } });
-        vessels = await prisma.vessel.findMany({ take: 10, orderBy: { createdAt: 'desc' } });
+      if (!existingMatch) {
+        logger.warn(`No existing match found for cargo ${cargoId}, vessel ${vesselId}`);
+        return;
       }
 
-      const matches: CargoVesselPair[] = [];
-
-      for (const cargo of cargos) {
-        for (const vessel of vessels) {
-          const matching = await this.analyzeMatch(cargo, vessel);
-          matches.push({ cargo, vessel, matching });
+      // Combine existing reason with AI analysis
+      const existingReason = existingMatch.reason as any || {};
+      const enhancedReason = {
+        ...existingReason,
+        aiAnalysis: {
+          compatibility: aiAnalysis.compatibility,
+          reasoning: aiAnalysis.reasoning,
+          breakdown: {
+            location: aiAnalysis.locationAnalysis,
+            timing: aiAnalysis.timingAnalysis,
+            cargo: aiAnalysis.cargoAnalysis
+          },
+          recommendations: aiAnalysis.recommendations,
+          risks: aiAnalysis.risks,
+          analyzedAt: new Date().toISOString()
         }
-      }
+      };
 
-      // Sort by matching score and return top matches
-      return matches
-        .sort((a, b) => b.matching.score - a.matching.score)
-        .slice(0, limit);
+      // Update match with enhanced AI analysis
+      await prisma.match.update({
+        where: { id: existingMatch.id },
+        data: {
+          reason: enhancedReason,
+          // Optionally adjust score based on AI analysis
+          score: Math.round((existingMatch.score + aiAnalysis.compatibility) / 2)
+        }
+      });
+
+      logger.info(`Enhanced match ${existingMatch.id} with AI analysis (${aiAnalysis.compatibility}% compatibility)`);
 
     } catch (error) {
-      logger.error('Error finding matches:', error);
-      throw error;
+      logger.error('Error updating match with AI analysis:', error);
     }
   }
 
-  async createMatch(cargoId: number, vesselId: number, manualScore?: number): Promise<any> {
+  /**
+   * En iyi match'leri kullanıcıya bildir (şimdilik log, sonra notification service)
+   */
+  private async notifyBestMatches(recordId: number, matches: any[], type: 'cargo' | 'vessel' = 'cargo'): Promise<void> {
+    if (matches.length === 0) {
+      logger.info(`No suitable matches found for ${type} ${recordId}`);
+      return;
+    }
+
+    const bestMatch = matches[0];
+    const goodMatches = matches.filter(m => m.score > 60);
+
+    logger.info(`🎯 Best matches for ${type} ${recordId}:`);
+    logger.info(`   Best: ${bestMatch.score}% (${type === 'cargo' ? `Vessel ${bestMatch.vesselId}` : `Cargo ${bestMatch.cargoId}`})`);
+    logger.info(`   Total good matches (>60%): ${goodMatches.length}`);
+
+    // TODO: Integrate with notification service
+    // await notificationService.notifyNewMatches(recordId, type, goodMatches);
+  }
+
+  /**
+   * Tüm pending match'leri yeniden analiz et
+   */
+  async reanalyzePendingMatches(): Promise<{ processed: number; enhanced: number }> {
     try {
-      // Get cargo and vessel details
-      const [cargo, vessel] = await Promise.all([
-        prisma.cargo.findUnique({ where: { id: cargoId } }),
-        prisma.vessel.findUnique({ where: { id: vesselId } })
-      ]);
-
-      if (!cargo || !vessel) {
-        throw new Error('Cargo or vessel not found');
-      }
-
-      // Analyze match if score not provided
-      let matchingResult: MatchingResult;
-      if (manualScore !== undefined) {
-        matchingResult = {
-          score: manualScore,
-          reasons: ['Manual match'],
-          compatibility: manualScore >= 80 ? 'EXCELLENT' : manualScore >= 65 ? 'GOOD' : manualScore >= 50 ? 'FAIR' : 'POOR',
-          concerns: [],
-          recommendations: ['Review match details']
-        };
-      } else {
-        matchingResult = await this.analyzeMatch(cargo, vessel);
-      }
-
-      // Create match record
-      const match = await prisma.match.create({
-        data: {
-          cargoId,
-          vesselId,
+      const pendingMatches = await prisma.match.findMany({
+        where: {
           status: 'SUGGESTED',
-          score: matchingResult.score,
+          // AI analizi yapılmamış match'ler
           reason: {
-            score: matchingResult.score,
-            compatibility: matchingResult.compatibility,
-            reasons: matchingResult.reasons,
-            concerns: matchingResult.concerns,
-            recommendations: matchingResult.recommendations,
-            analyzedAt: new Date().toISOString()
-          } as any
+            path: ['aiAnalysis'],
+            equals: {}
+          }
         },
+        take: 20, // Batch processing
         include: {
           cargo: true,
           vessel: true
         }
       });
 
-      logger.info(`Created match: Cargo ${cargoId} + Vessel ${vesselId} (Score: ${matchingResult.score}%)`);
-      
-      return match;
+      let processed = 0;
+      let enhanced = 0;
+
+      for (const match of pendingMatches) {
+        try {
+          const aiAnalysis = await this.performAIAnalysis(match.cargo, match.vessel);
+          await this.updateMatchWithAIAnalysis(match.cargoId, match.vesselId, aiAnalysis);
+          processed++;
+          
+          if (aiAnalysis.compatibility > 70) {
+            enhanced++;
+          }
+        } catch (error) {
+          logger.error(`Error reanalyzing match ${match.id}:`, error);
+        }
+      }
+
+      logger.info(`Reanalyzed ${processed} matches, ${enhanced} enhanced with high compatibility`);
+      return { processed, enhanced };
 
     } catch (error) {
-      logger.error('Error creating match:', error);
-      throw error;
+      logger.error('Error in batch reanalysis:', error);
+      return { processed: 0, enhanced: 0 };
+    }
+  }
+
+  /**
+   * Match kalitesini değerlendir
+   */
+  async getMatchQualityMetrics(): Promise<{
+    totalMatches: number;
+    aiEnhanced: number;
+    highQuality: number;
+    averageCompatibility: number;
+  }> {
+    try {
+      const [
+        totalMatches,
+        aiEnhanced,
+        allMatches
+      ] = await Promise.all([
+        prisma.match.count(),
+        prisma.match.count({
+          where: {
+            reason: {
+              path: ['aiAnalysis', 'compatibility'],
+              gte: 0
+            }
+          }
+        }),
+        prisma.match.findMany({
+          where: {
+            reason: {
+              path: ['aiAnalysis', 'compatibility'],
+              gte: 0
+            }
+          },
+          select: {
+            reason: true,
+            score: true
+          }
+        })
+      ]);
+
+      const compatibilityScores = allMatches
+        .map(m => (m.reason as any)?.aiAnalysis?.compatibility)
+        .filter(score => typeof score === 'number');
+
+      const averageCompatibility = compatibilityScores.length > 0 ?
+        compatibilityScores.reduce((sum, score) => sum + score, 0) / compatibilityScores.length : 0;
+
+      const highQuality = compatibilityScores.filter(score => score > 75).length;
+
+      return {
+        totalMatches,
+        aiEnhanced,
+        highQuality,
+        averageCompatibility: Math.round(averageCompatibility)
+      };
+
+    } catch (error) {
+      logger.error('Error getting match quality metrics:', error);
+      return {
+        totalMatches: 0,
+        aiEnhanced: 0,
+        highQuality: 0,
+        averageCompatibility: 0
+      };
     }
   }
 }

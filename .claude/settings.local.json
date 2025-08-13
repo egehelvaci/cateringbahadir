@@ -30,7 +30,10 @@
       "Bash(railway run npx prisma studio:*)",
       "Bash(railway run npx prisma db execute:*)",
       "Bash(git commit:*)",
-      "Bash(start \"http://localhost:5557\")"
+      "Bash(start \"http://localhost:5557\")",
+      "Bash(tasklist:*)",
+      "Bash(timeout:*)",
+      "Bash(PORT=3001 npm run dev)"
     ],
     "deny": []
   }
