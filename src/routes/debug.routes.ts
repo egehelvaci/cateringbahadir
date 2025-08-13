@@ -5,6 +5,7 @@ import { prisma } from '../config/database';
 import { AIClassificationService } from '../services/ai-classification.service';
 import { OpenAIService } from '../services/openai.service';
 import { logger } from '../utils/logger';
+import { reprocessInboxEmails } from '../scripts/reprocess-inbox-emails';
 
 const router = Router();
 const aiClassification = new AIClassificationService();
@@ -187,6 +188,35 @@ router.post('/test-classification',
         },
         timestamp: new Date().toISOString(),
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Debug: Reprocess all inbox emails 
+router.post('/emails/reprocess-all',
+  strictRateLimiter,
+  authenticate,
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      logger.info('Starting inbox reprocessing via API...');
+      
+      // Start reprocessing in background
+      reprocessInboxEmails()
+        .then(() => {
+          logger.info('Background reprocessing completed successfully');
+        })
+        .catch((error) => {
+          logger.error('Background reprocessing failed:', error);
+        });
+
+      res.json({
+        success: true,
+        message: 'Inbox reprocessing started in background. Check logs for progress.',
+        timestamp: new Date().toISOString(),
+      });
+      
     } catch (error) {
       next(error);
     }

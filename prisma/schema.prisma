@@ -58,21 +58,48 @@ model InboundEmail {
 }
 
 model Cargo {
-  id            Int       @id @default(autoincrement())
-  commodity     String
-  qtyValue      Float?
-  qtyUnit       String?
-  loadPort      String?
-  dischargePort String?
-  laycanStart   DateTime?
-  laycanEnd     DateTime?
-  notes         String?
-  embedding     Bytes?
-  createdAt     DateTime  @default(now())
-  matches       Match[]
+  id               Int       @id @default(autoincrement())
+  commodity        String
+  qtyValue         Float?
+  qtyUnit          String?
+  loadPort         String?
+  dischargePort    String?
+  laycanStart      DateTime?
+  laycanEnd        DateTime?
+  notes            String?
+  embedding        Bytes?
+  
+  // Yeni alanlar
+  cargoType        String?   // PET, steel, grain, etc - daha spesifik yük tipi
+  loadingType      String?   // break bulk, container, bulk, etc
+  loadingRate      Float?    // ton/day
+  dischargingRate  Float?    // ton/day
+  commission       Float?    // percentage (3.75 for %3.75)
+  
+  // Vessel gereksinimleri
+  vesselDwtMin     Float?    // minimum DWT requirement
+  vesselDwtMax     Float?    // maximum DWT requirement
+  vesselType       String?   // Bulk Carrier, Container, Tanker, etc
+  
+  // İlave detaylar
+  charterer        String?   // Kiralayan firma (Interpipe)
+  freightIdea      String?   // Navlun beklentisi ("low 50")
+  maxAge           Int?      // Maksimum gemi yaşı (25 yıl)
+  excludeFlags     String?   // İstenmeyen bayraklar (Iran/Iraq)
+  craneCap         String?   // Vinç kapasitesi (4x30 MT SWL)
+  specialRequirements String? // Özel gereksinimler
+  vesselShape      String?   // Gemi ambar şekli (box-shaped)
+  maxDiameter      Float?    // Maksimum çap (mm)
+  maxLength        Float?    // Maksimum uzunluk (mm)
+  transshipment    Boolean?  // Ara yükleme var mı
+  
+  createdAt        DateTime  @default(now())
+  matches          Match[]
   
   @@index([commodity])
+  @@index([cargoType])
   @@index([laycanStart, laycanEnd])
+  @@index([vesselDwtMin, vesselDwtMax])
 }
 
 model Vessel {
@@ -87,11 +114,28 @@ model Vessel {
   gear          String?
   notes         String?
   embedding     Bytes?
+  
+  // Vessel tipi ve özellikleri
+  vesselType    String?   // Bulk Carrier, Container, Tanker, General Cargo, etc
+  builtYear     Int?      // Yapım yılı
+  flag          String?   // Bayrak ülkesi
+  loa           Float?    // Length Overall (m)
+  beam          Float?    // Genişlik (m)
+  draft         Float?    // Draft (m)
+  grt           Float?    // Gross Tonnage
+  nrt           Float?    // Net Tonnage
+  holds         Int?      // Ambar sayısı
+  hatches       Int?      // Lük sayısı
+  cranes        String?   // Vinç bilgileri
+  teu           Int?      // Container kapasitesi (TEU)
+  
   createdAt     DateTime  @default(now())
   matches       Match[]
   
   @@index([availableFrom])
   @@index([currentArea])
+  @@index([vesselType])
+  @@index([dwt])
 }
 
 model Match {

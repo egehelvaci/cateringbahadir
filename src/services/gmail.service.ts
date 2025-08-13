@@ -430,6 +430,28 @@ export class GmailService {
             laycanEnd: cargoData.laycanEnd ? new Date(cargoData.laycanEnd) : null,
             notes: cargoData.notes || null,
             embedding: Buffer.from(new Float32Array(embedding).buffer),
+            
+            // Yeni alanlar
+            cargoType: cargoData.cargoType || null,
+            loadingType: cargoData.loadingType || null,
+            loadingRate: cargoData.loadingRate || null,
+            dischargingRate: cargoData.dischargingRate || null,
+            commission: cargoData.commission || null,
+            vesselDwtMin: cargoData.vesselDwtMin || null,
+            vesselDwtMax: cargoData.vesselDwtMax || null,
+            vesselType: cargoData.vesselType || null,
+            
+            // İlave detaylar
+            charterer: cargoData.charterer || null,
+            freightIdea: cargoData.freightIdea || null,
+            maxAge: cargoData.maxAge || null,
+            excludeFlags: cargoData.excludeFlags || null,
+            craneCap: cargoData.craneCap || null,
+            specialRequirements: cargoData.specialRequirements || null,
+            vesselShape: cargoData.vesselShape || null,
+            maxDiameter: cargoData.maxDiameter || null,
+            maxLength: cargoData.maxLength || null,
+            transshipment: cargoData.transshipment || null,
           },
         });
         
@@ -460,6 +482,20 @@ export class GmailService {
             gear: vesselData.gear || null,
             notes: vesselData.notes || null,
             embedding: Buffer.from(new Float32Array(embedding).buffer),
+            
+            // Yeni vessel alanları
+            vesselType: vesselData.vesselType || null,
+            builtYear: vesselData.builtYear || null,
+            flag: vesselData.flag || null,
+            loa: vesselData.loa || null,
+            beam: vesselData.beam || null,
+            draft: vesselData.draft || null,
+            grt: vesselData.grt || null,
+            nrt: vesselData.nrt || null,
+            holds: vesselData.holds || null,
+            hatches: vesselData.hatches || null,
+            cranes: vesselData.cranes || null,
+            teu: vesselData.teu || null,
           },
         });
         
