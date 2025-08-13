@@ -204,7 +204,7 @@ export class GmailService {
               parsedJson = extraction;
               
               // Save to appropriate table (Cargo or Vessel)
-              await this.saveToSpecificTable(extraction, classification);
+              await this.saveToSpecificTable(extraction);
               
               logger.info(`Successfully classified and saved ${classification.type} from email ${message.id}`);
             } catch (extractError) {
@@ -228,7 +228,7 @@ export class GmailService {
             receivedAt: new Date(parseInt(message.internalDate)),
             raw: messageBody,
             parsedType: parsedType,
-            parsedJson: parsedJson,
+            parsedJson: parsedJson as any,
             gmailId: message.id,
             threadId: message.threadId,
             labelIds: message.labelIds || [],
@@ -389,7 +389,7 @@ export class GmailService {
   /**
    * Save extracted data to specific table (Cargo or Vessel)
    */
-  private async saveToSpecificTable(extraction: any, classification: any): Promise<void> {
+  private async saveToSpecificTable(extraction: any): Promise<void> {
     try {
       if (extraction.type === 'CARGO') {
         const cargoData = extraction.data;

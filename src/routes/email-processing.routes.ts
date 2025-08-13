@@ -11,7 +11,7 @@ const emailProcessingService = new EmailProcessingService();
 router.post('/process',
   strictRateLimiter,
   authenticate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (_req: Request, res: Response, next: NextFunction) => {
     try {
       logger.info('Manual email processing triggered');
       
@@ -34,7 +34,7 @@ router.post('/process',
 router.get('/stats',
   strictRateLimiter,
   authenticate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (_req: Request, res: Response, next: NextFunction) => {
     try {
       const stats = await emailProcessingService.getProcessingStats();
       

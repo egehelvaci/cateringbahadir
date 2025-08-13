@@ -95,7 +95,7 @@ export class EmailProcessingService {
         where: { id: email.id },
         data: {
           parsedType: classification.type !== 'UNKNOWN' ? classification.type : null,
-          parsedJson: parsedJson,
+          parsedJson: parsedJson as any,
         },
       });
 

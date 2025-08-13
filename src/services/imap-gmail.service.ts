@@ -324,7 +324,7 @@ export class ImapGmailService {
               receivedAt: message.date,
               raw: message.body,
               parsedType: emailType,
-              parsedJson: parsedJson || {
+              parsedJson: (parsedJson as any) || {
                 id: message.id,
                 to: message.to,
                 html: message.html,
