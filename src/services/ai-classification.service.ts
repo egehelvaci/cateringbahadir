@@ -109,8 +109,17 @@ Respond ONLY with valid JSON in this format:
   private fallbackClassification(subject: string, body: string): EmailClassification {
     const text = `${subject} ${body}`.toLowerCase();
     
-    const cargoKeywords = ['cargo', 'commodity', 'grain', 'coal', 'iron ore', 'wheat', 'seeking vessel', 'tonnage required'];
-    const vesselKeywords = ['vessel', 'ship', 'dwt', 'ballast', 'vessel available', 'seeking cargo', 'ship open'];
+    const cargoKeywords = [
+      'cargo', 'commodity', 'grain', 'coal', 'iron ore', 'wheat', 'corn', 'soybean', 'rice', 'barley',
+      'seeking vessel', 'tonnage required', 'shipment', 'bulk', 'tonnage', 'mt', 'metric ton',
+      'steel', 'scrap', 'fertilizer', 'cement', 'sugar', 'salt', 'feed', 'pellets',
+      'load', 'loading', 'discharge', 'unload', 'laycan', 'cif', 'fob'
+    ];
+    const vesselKeywords = [
+      'vessel', 'ship', 'dwt', 'ballast', 'vessel available', 'seeking cargo', 'ship open',
+      'mv ', 'ss ', 'bulker', 'tanker', 'handymax', 'supramax', 'panamax', 'capesize',
+      'built', 'flag', 'imo', 'loa', 'beam', 'draft', 'holds', 'hatches', 'crane', 'gear'
+    ];
     
     const cargoScore = cargoKeywords.filter(keyword => text.includes(keyword)).length;
     const vesselScore = vesselKeywords.filter(keyword => text.includes(keyword)).length;

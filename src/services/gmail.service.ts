@@ -195,7 +195,7 @@ export class GmailService {
             headers.from || ''
           );
           
-          if (classification.type !== 'UNKNOWN' && classification.confidence > 0.6) {
+          if (classification.type !== 'UNKNOWN' && classification.confidence > 0.3) {
             parsedType = classification.type;
             
             // Extract structured data using OpenAI
@@ -341,13 +341,31 @@ export class GmailService {
 
   private extractMessageBody(message: GmailMessage): string {
     try {
-      // Try to get raw content first
+      // Raw email content için daha iyi parsing
       if (message.raw) {
-        return Buffer.from(message.raw, 'base64').toString('utf8');
+        const rawContent = Buffer.from(message.raw, 'base64').toString('utf8');
+        // Email headers'ını temizle ve sadece body'yi al
+        const bodyMatch = rawContent.match(/\r?\n\r?\n([\s\S]*)/);
+        if (bodyMatch) {
+          let cleanBody = bodyMatch[1];
+          // HTML tags'ları temizle
+          cleanBody = cleanBody.replace(/<[^>]*>/g, '');
+          // Quoted-printable encoding'i decode et
+          cleanBody = cleanBody.replace(/=\r?\n/g, '');
+          cleanBody = cleanBody.replace(/=([0-9A-F]{2})/g, (_, hex) => 
+            String.fromCharCode(parseInt(hex, 16))
+          );
+          return cleanBody.trim();
+        }
+        return rawContent;
       }
 
-      // Otherwise, extract from payload
-      return this.extractTextFromPayload(message.payload) || message.snippet || '';
+      // Payload'dan extract et
+      const text = this.extractTextFromPayload(message.payload);
+      if (text) return text;
+
+      // Son çare olarak snippet kullan
+      return message.snippet || '';
     } catch (error) {
       logger.error('Error extracting message body:', error);
       return message.snippet || '';

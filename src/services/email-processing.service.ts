@@ -72,7 +72,7 @@ export class EmailProcessingService {
 
       let parsedJson = null;
 
-      if (classification.type !== 'UNKNOWN' && classification.confidence > 0.6) {
+      if (classification.type !== 'UNKNOWN' && classification.confidence > 0.3) {
         try {
           // Extract structured data using OpenAI
           const extraction = await this.openaiService.extractFromEmail(email.raw);

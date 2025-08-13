@@ -289,7 +289,7 @@ export class ImapGmailService {
                 message.from
               );
               
-              if (aiClassification.type !== 'UNKNOWN' && aiClassification.confidence > 0.6) {
+              if (aiClassification.type !== 'UNKNOWN' && aiClassification.confidence > 0.3) {
                 emailType = aiClassification.type === 'CARGO' ? MailType.CARGO : MailType.VESSEL;
                 
                 // Extract structured data using OpenAI

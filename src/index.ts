@@ -20,6 +20,12 @@ import cargoRoutes from './routes/cargo.routes';
 import vesselRoutes from './routes/vessel.routes';
 import matchingRoutes from './routes/matching.routes';
 import emailProcessingRoutes from './routes/email-processing.routes';
+import debugRoutes from './routes/debug.routes';
+import inboxRoutes from './routes/inbox.routes';
+import analyticsRoutes from './routes/analytics.routes';
+import dashboardRoutes from './routes/dashboard.routes';
+import settingsRoutes from './routes/settings.routes';
+import notificationsRoutes from './routes/notifications.routes';
 // import microsoftGraphRoutes from './routes/microsoft-graph.routes';
 
 dotenv.config();
@@ -71,6 +77,12 @@ app.use('/api', cargoRoutes);
 app.use('/api', vesselRoutes);
 app.use('/api', matchingRoutes);
 app.use('/api/emails', emailProcessingRoutes);
+app.use('/api/debug', debugRoutes);
+app.use('/inbox', inboxRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 // app.use('/api', microsoftGraphRoutes);
 
 app.use(errorHandler);
