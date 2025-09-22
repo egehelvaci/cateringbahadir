@@ -89,7 +89,7 @@ router.get('/download/:fileName',
 router.get('/stats',
   strictRateLimiter,
   authenticate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (_req: Request, res: Response, next: NextFunction) => {
     try {
       const stats = await mailExportService.getExportStats();
       
@@ -108,7 +108,7 @@ router.get('/stats',
 router.get('/files',
   strictRateLimiter,
   authenticate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (_req: Request, res: Response, next: NextFunction) => {
     try {
       const files = await mailExportService.listExportedFiles();
       
