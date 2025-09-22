@@ -91,7 +91,7 @@ export class GoogleOAuthService {
           refreshToken: encryptedRefreshToken,
           scope: tokens.scope,
           tokenType: tokens.token_type,
-          expiryDate: BigInt(tokens.expiry_date),
+          expiryDate: Number(tokens.expiry_date),
           updatedAt: new Date(),
         },
         create: {
@@ -100,7 +100,7 @@ export class GoogleOAuthService {
           refreshToken: encryptedRefreshToken,
           scope: tokens.scope,
           tokenType: tokens.token_type,
-          expiryDate: BigInt(tokens.expiry_date),
+          expiryDate: Number(tokens.expiry_date),
         },
       });
 

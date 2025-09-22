@@ -15,7 +15,7 @@ const handleValidationErrors = (req: Request, res: Response, next: any) => {
       errors: errors.array()
     });
   }
-  next();
+  return next();
 };
 
 /**
@@ -280,7 +280,7 @@ router.put('/:id', [
   body('loadPort').optional().isString().isLength({ min: 1, max: 100 }),
   body('laycanStart').optional().isISO8601(),
   body('laycanEnd').optional().isISO8601(),
-  body('quantity').optional().isNumeric({ min: 0 }),
+  body('quantity').optional().isNumeric(),
   body('stowageFactorValue').optional().isNumeric(),
   body('stowageFactorUnit').optional().isIn(['cuft/mt', 'm3/mt', 'cbm/mt']),
   body('brokenStowagePct').optional().isNumeric(),
@@ -412,7 +412,7 @@ router.delete('/:id', [
 router.get('/:id/matches', [
   param('id').isNumeric(),
   query('status').optional().isIn(['PROPOSED', 'ACCEPTED', 'REJECTED', 'EXPIRED']),
-  query('minScore').optional().isNumeric({ min: 0, max: 100 })
+  query('minScore').optional().isNumeric()
 ], handleValidationErrors, async (req: Request, res: Response) => {
   try {
     const cargoId = parseInt(req.params.id);
@@ -460,7 +460,7 @@ router.post('/bulk', [
   body('cargos.*.loadPort').isString().isLength({ min: 1, max: 100 }),
   body('cargos.*.laycanStart').isISO8601(),
   body('cargos.*.laycanEnd').isISO8601(),
-  body('cargos.*.quantity').isNumeric({ min: 0 })
+  body('cargos.*.quantity').isNumeric()
 ], handleValidationErrors, async (req: Request, res: Response) => {
   try {
     const { cargos } = req.body;

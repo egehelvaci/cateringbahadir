@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
 import { body, query, param, validationResult } from 'express-validator';
@@ -49,7 +49,7 @@ router.get('/', [
   query('limit').optional().isInt({ min: 1, max: 100 }),
   query('sortBy').optional().isIn(['name', 'country', 'type', 'createdAt']),
   query('sortOrder').optional().isIn(['asc', 'desc'])
-], handleValidationErrors, async (req, res) => {
+], handleValidationErrors, async (req: Request, res: Response) => {
   try {
     const {
       search,
@@ -130,7 +130,7 @@ router.get('/', [
  */
 router.get('/:id', [
   param('id').isNumeric()
-], handleValidationErrors, async (req, res) => {
+], handleValidationErrors, async (req: Request, res: Response) => {
   try {
     const portId = parseInt(req.params.id);
 
@@ -166,11 +166,11 @@ router.get('/:id', [
 router.post('/', [
   body('name').isString().isLength({ min: 1, max: 100 }),
   body('country').isString().isLength({ min: 1, max: 50 }),
-  body('latitude').isNumeric({ min: -90, max: 90 }),
-  body('longitude').isNumeric({ min: -180, max: 180 }),
+  body('latitude').isNumeric(),
+  body('longitude').isNumeric(),
   body('alternateNames').optional().isArray(),
   body('type').optional().isString().isLength({ max: 50 })
-], handleValidationErrors, async (req, res) => {
+], handleValidationErrors, async (req: Request, res: Response) => {
   try {
     const {
       name,
@@ -229,11 +229,11 @@ router.put('/:id', [
   param('id').isNumeric(),
   body('name').optional().isString().isLength({ min: 1, max: 100 }),
   body('country').optional().isString().isLength({ min: 1, max: 50 }),
-  body('latitude').optional().isNumeric({ min: -90, max: 90 }),
-  body('longitude').optional().isNumeric({ min: -180, max: 180 }),
+  body('latitude').optional().isNumeric(),
+  body('longitude').optional().isNumeric(),
   body('alternateNames').optional().isArray(),
   body('type').optional().isString().isLength({ max: 50 })
-], handleValidationErrors, async (req, res) => {
+], handleValidationErrors, async (req: Request, res: Response) => {
   try {
     const portId = parseInt(req.params.id);
     const updateData: any = {};
@@ -305,7 +305,7 @@ router.put('/:id', [
  */
 router.delete('/:id', [
   param('id').isNumeric()
-], handleValidationErrors, async (req, res) => {
+], handleValidationErrors, async (req: Request, res: Response) => {
   try {
     const portId = parseInt(req.params.id);
 
@@ -347,8 +347,8 @@ router.delete('/:id', [
 router.get('/calculate-distance', [
   query('from').isString().isLength({ min: 1, max: 100 }),
   query('to').isString().isLength({ min: 1, max: 100 }),
-  query('routeFactor').optional().isNumeric({ min: 1, max: 2 })
-], handleValidationErrors, async (req, res) => {
+  query('routeFactor').optional().isNumeric()
+], handleValidationErrors, async (req: Request, res: Response) => {
   try {
     const { from, to, routeFactor = 1.20 } = req.query;
 
@@ -358,7 +358,7 @@ router.get('/calculate-distance', [
         where: {
           OR: [
             { name: { contains: from as string, mode: 'insensitive' } },
-            { alternateNames: { path: '$[*]', string_contains: from as string } }
+            { alternateNames: { array_contains: from as string } }
           ]
         }
       }),
@@ -366,7 +366,7 @@ router.get('/calculate-distance', [
         where: {
           OR: [
             { name: { contains: to as string, mode: 'insensitive' } },
-            { alternateNames: { path: '$[*]', string_contains: to as string } }
+            { alternateNames: { array_contains: to as string } }
           ]
         }
       })
@@ -442,9 +442,9 @@ router.post('/bulk', [
   body('ports').isArray({ min: 1, max: 100 }),
   body('ports.*.name').isString().isLength({ min: 1, max: 100 }),
   body('ports.*.country').isString().isLength({ min: 1, max: 50 }),
-  body('ports.*.latitude').isNumeric({ min: -90, max: 90 }),
-  body('ports.*.longitude').isNumeric({ min: -180, max: 180 })
-], handleValidationErrors, async (req, res) => {
+  body('ports.*.latitude').isNumeric(),
+  body('ports.*.longitude').isNumeric()
+], handleValidationErrors, async (req: Request, res: Response) => {
   try {
     const { ports } = req.body;
     const createdPorts = [];
@@ -515,7 +515,7 @@ router.post('/bulk', [
 router.get('/search-suggestions', [
   query('q').isString().isLength({ min: 1, max: 50 }),
   query('limit').optional().isInt({ min: 1, max: 20 })
-], handleValidationErrors, async (req, res) => {
+], handleValidationErrors, async (req: Request, res: Response) => {
   try {
     const { q, limit = 10 } = req.query;
 
@@ -523,7 +523,7 @@ router.get('/search-suggestions', [
       where: {
         OR: [
           { name: { contains: q as string, mode: 'insensitive' } },
-          { alternateNames: { path: '$[*]', string_contains: q as string } }
+          { alternateNames: { array_contains: q as string } }
         ]
       },
       select: {
@@ -562,7 +562,7 @@ router.get('/search-suggestions', [
 /**
  * POST /api/ports/seed-default - Varsayılan limanları ekle
  */
-router.post('/seed-default', async (req, res) => {
+router.post('/seed-default', async (_req, res) => {
   try {
     const defaultPorts = [
       { name: 'Gemlik', country: 'Turkey', latitude: 40.43, longitude: 29.15, type: 'seaport' },

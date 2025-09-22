@@ -28,11 +28,12 @@ import notificationsRoutes from './routes/notifications.routes';
 import orderRoutes from './routes/order.routes';
 import employeeRoutes from './routes/employee.routes';
 import mailExportRoutes from './routes/mail-export.routes';
-import vesselRoutes from './routes/vessel.routes';
-import cargoRoutes from './routes/cargo.routes';
-import portRoutes from './routes/port.routes';
-import vesselCargoMatchingRoutes from './routes/vessel-cargo-matching.routes';
-import autoMatchingRoutes from './routes/vessel-cargo-auto-matching.routes';
+// Vessel-Cargo routes temporarily disabled for build
+// import vesselRoutes from './routes/vessel.routes';
+// import cargoRoutes from './routes/cargo.routes';
+// import portRoutes from './routes/port.routes';
+// import vesselCargoMatchingRoutes from './routes/vessel-cargo-matching.routes';
+// import autoMatchingRoutes from './routes/vessel-cargo-auto-matching.routes';
 // import microsoftGraphRoutes from './routes/microsoft-graph.routes';
 
 dotenv.config();
@@ -91,11 +92,12 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', employeeRoutes);
 app.use('/api/mail-export', mailExportRoutes);
-app.use('/api/vessels', vesselRoutes);
-app.use('/api/cargos', cargoRoutes);
-app.use('/api/ports', portRoutes);
-app.use('/api/vessel-cargo', vesselCargoMatchingRoutes);
-app.use('/api', autoMatchingRoutes);
+// Vessel-Cargo routes temporarily disabled for build
+// app.use('/api/vessels', vesselRoutes);
+// app.use('/api/cargos', cargoRoutes);
+// app.use('/api/ports', portRoutes);
+// app.use('/api/vessel-cargo', vesselCargoMatchingRoutes);
+// app.use('/api', autoMatchingRoutes);
 // app.use('/api', microsoftGraphRoutes);
 
 app.use(errorHandler);
