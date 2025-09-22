@@ -11,6 +11,7 @@ import { logger } from './utils/logger';
 import { prisma } from './config/database';
 // import { GmailPollingService } from './services/gmail-polling.service';
 import { ImapPollingService } from './services/imap-polling.service';
+import { AutomatedMailProcessorService } from './services/automated-mail-processor.service';
 
 import googleOAuthRoutes from './routes/google-oauth.routes';
 import authRoutes from './routes/auth.routes';
@@ -28,6 +29,7 @@ import settingsRoutes from './routes/settings.routes';
 import notificationsRoutes from './routes/notifications.routes';
 import orderRoutes from './routes/order.routes';
 import employeeRoutes from './routes/employee.routes';
+import mailExportRoutes from './routes/mail-export.routes';
 // import microsoftGraphRoutes from './routes/microsoft-graph.routes';
 
 dotenv.config();
@@ -87,6 +89,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', employeeRoutes);
+app.use('/api/mail-export', mailExportRoutes);
 // app.use('/api', microsoftGraphRoutes);
 
 app.use(errorHandler);
@@ -108,6 +111,13 @@ const startServer = async () => {
     if (process.env.NODE_ENV === 'production' || process.env.ENABLE_GMAIL_POLLING === 'true') {
       imapPoller.startPolling();
       logger.info('IMAP polling service started - emails will be automatically saved to database');
+    }
+
+    // Start automated mail processor for classification and data extraction
+    const mailProcessor = new AutomatedMailProcessorService();
+    if (process.env.NODE_ENV === 'production' || process.env.ENABLE_MAIL_PROCESSING === 'true') {
+      mailProcessor.startAutomaticProcessing();
+      logger.info('Automated mail processor started - emails will be automatically classified and processed');
     }
     
     app.listen(PORT, () => {

@@ -55,10 +55,15 @@ model InboundEmail {
   labelIds    Json?     // Gmail labels
   historyId   String?   // Gmail history id
   createdAt   DateTime  @default(now())
+  
+  // Relations to extracted data
+  cargo       Cargo[]
+  vessel      Vessel[]
 }
 
 model Cargo {
   id               Int       @id @default(autoincrement())
+  emailId          Int?      // Link to source email
   commodity        String
   qtyValue         Float?
   qtyUnit          String?
@@ -93,17 +98,24 @@ model Cargo {
   maxLength        Float?    // Maksimum uzunluk (mm)
   transshipment    Boolean?  // Ara yükleme var mı
   
+  // Extracted data
+  extractedData    Json?     // Raw extracted data from AI
+  confidence       Float?    // Classification confidence
+  
   createdAt        DateTime  @default(now())
+  sourceEmail      InboundEmail? @relation(fields: [emailId], references: [id])
   matches          Match[]
   
   @@index([commodity])
   @@index([cargoType])
   @@index([laycanStart, laycanEnd])
   @@index([vesselDwtMin, vesselDwtMax])
+  @@index([emailId])
 }
 
 model Vessel {
   id            Int       @id @default(autoincrement())
+  emailId       Int?      // Link to source email
   name          String?
   imo           String?
   dwt           Float?
@@ -129,13 +141,19 @@ model Vessel {
   cranes        String?   // Vinç bilgileri
   teu           Int?      // Container kapasitesi (TEU)
   
+  // Extracted data
+  extractedData Json?     // Raw extracted data from AI
+  confidence    Float?    // Classification confidence
+  
   createdAt     DateTime  @default(now())
+  sourceEmail   InboundEmail? @relation(fields: [emailId], references: [id])
   matches       Match[]
   
   @@index([availableFrom])
   @@index([currentArea])
   @@index([vesselType])
   @@index([dwt])
+  @@index([emailId])
 }
 
 model Match {

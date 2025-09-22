@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { logger } from '../utils/logger';
+import { getEmailClassifier } from './ml/emailClassifier';
 
 interface EmailClassification {
   type: 'CARGO' | 'VESSEL' | 'UNKNOWN';
@@ -34,6 +35,35 @@ export class AIClassificationService {
 
   async classifyEmail(subject: string, body: string, fromAddr: string): Promise<EmailClassification> {
     try {
+      // First try our custom ML model
+      const mlClassifier = getEmailClassifier();
+      const mlResult = mlClassifier.classifyEmail(subject, body, fromAddr);
+      
+      logger.info(`ML Model classified as ${mlResult.type} with ${mlResult.confidence} confidence`);
+      
+      // If confidence is high enough, use ML model result
+      if (mlResult.confidence > 0.7) {
+        // Extract detailed data using OpenAI for high confidence classifications
+        try {
+          const extractedData = await this.extractDetailsWithOpenAI(mlResult.type, subject, body);
+          return {
+            type: mlResult.type,
+            confidence: mlResult.confidence,
+            reason: `ML model classification with high confidence`,
+            extractedData
+          };
+        } catch (extractError) {
+          logger.warn('Failed to extract details with OpenAI:', extractError);
+          return {
+            type: mlResult.type,
+            confidence: mlResult.confidence,
+            reason: `ML model classification`
+          };
+        }
+      }
+      
+      // If ML confidence is low, use OpenAI as fallback
+      logger.info('ML confidence low, using OpenAI for classification');
       const prompt = `
 Analyze this email and classify it as either CARGO (cargo/commodity seeking vessel) or VESSEL (vessel seeking cargo).
 
@@ -95,7 +125,7 @@ Respond ONLY with valid JSON in this format:
       // Parse JSON response
       const classification: EmailClassification = JSON.parse(content);
       
-      logger.info(`Email classified as ${classification.type} with ${classification.confidence} confidence`);
+      logger.info(`OpenAI classified as ${classification.type} with ${classification.confidence} confidence`);
       
       return classification;
 
@@ -105,6 +135,46 @@ Respond ONLY with valid JSON in this format:
       // Fallback to simple keyword classification
       return this.fallbackClassification(subject, body);
     }
+  }
+
+  private async extractDetailsWithOpenAI(type: 'CARGO' | 'VESSEL', subject: string, body: string): Promise<any> {
+    try {
+      const prompt = type === 'CARGO' 
+        ? `Extract cargo details from this email:
+Subject: ${subject}
+Body: ${body.substring(0, 1000)}
+
+Extract: commodity, quantity, loadPort, dischargePort, laycan`
+        : `Extract vessel details from this email:
+Subject: ${subject}
+Body: ${body.substring(0, 1000)}
+
+Extract: vesselName, imo, dwt, capacity, currentLocation, availability`;
+
+      const response = await this.openai.chat.completions.create({
+        model: process.env.OPENAI_EXTRACT_MODEL || 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'Extract structured data from maritime emails. Return only valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0,
+        max_tokens: 300
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (content) {
+        return JSON.parse(content);
+      }
+    } catch (error) {
+      logger.warn('Failed to extract details:', error);
+    }
+    return {};
   }
 
   private fallbackClassification(subject: string, body: string): EmailClassification {

@@ -33,7 +33,9 @@
       "Bash(start \"http://localhost:5557\")",
       "Bash(tasklist:*)",
       "Bash(timeout:*)",
-      "Bash(PORT=3001 npm run dev)"
+      "Bash(PORT=3001 npm run dev)",
+      "Bash(python:*)",
+      "Bash(npm run typecheck:*)"
     ],
     "deny": []
   }

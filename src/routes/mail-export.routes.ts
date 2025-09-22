@@ -1,0 +1,126 @@
+import { Router, Request, Response, NextFunction } from 'express';
+import { authenticate } from '../middleware/auth';
+import { strictRateLimiter } from '../middleware/rateLimiter';
+import { MailExportService } from '../services/mail-export.service';
+import { logger } from '../utils/logger';
+
+const router = Router();
+const mailExportService = new MailExportService();
+
+// Export emails to TXT format with date/time filters
+router.post('/export-txt',
+  strictRateLimiter,
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const {
+        startDate,
+        endDate,
+        startTime,
+        endTime,
+        fromEmail,
+        subjectFilter,
+        includeRaw = false
+      } = req.body;
+
+      logger.info('Mail export request received', {
+        startDate,
+        endDate,
+        startTime,
+        endTime,
+        fromEmail,
+        subjectFilter,
+        includeRaw
+      });
+
+      const result = await mailExportService.exportEmailsToTxt({
+        startDate,
+        endDate,
+        startTime,
+        endTime,
+        fromEmail,
+        subjectFilter,
+        includeRaw
+      });
+
+      res.json({
+        success: true,
+        message: 'Mail export completed successfully',
+        data: {
+          fileName: result.fileName,
+          totalEmails: result.totalEmails,
+          fileSize: result.fileSize,
+          downloadUrl: `/api/mail-export/download/${result.fileName}`
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Download exported file
+router.get('/download/:fileName',
+  strictRateLimiter,
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { fileName } = req.params;
+      
+      const filePath = await mailExportService.getExportedFilePath(fileName);
+      
+      res.download(filePath, fileName, (err) => {
+        if (err) {
+          logger.error('Error downloading file:', err);
+          res.status(404).json({
+            success: false,
+            message: 'File not found'
+          });
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get export statistics
+router.get('/stats',
+  strictRateLimiter,
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const stats = await mailExportService.getExportStats();
+      
+      res.json({
+        success: true,
+        data: stats,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// List available export files
+router.get('/files',
+  strictRateLimiter,
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const files = await mailExportService.listExportedFiles();
+      
+      res.json({
+        success: true,
+        data: files,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+export default router;

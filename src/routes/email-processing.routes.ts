@@ -2,10 +2,12 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate } from '../middleware/auth';
 import { strictRateLimiter } from '../middleware/rateLimiter';
 import { EmailProcessingService } from '../services/email-processing.service';
+import { AutomatedMailProcessorService } from '../services/automated-mail-processor.service';
 import { logger } from '../utils/logger';
 
 const router = Router();
 const emailProcessingService = new EmailProcessingService();
+const automatedProcessorService = new AutomatedMailProcessorService();
 
 // Process unprocessed emails
 router.post('/process',
@@ -30,17 +32,62 @@ router.post('/process',
   }
 );
 
+// Enhanced processing with new automated service
+router.post('/process-enhanced',
+  strictRateLimiter,
+  authenticate,
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      logger.info('Enhanced automated email processing triggered');
+      
+      const result = await automatedProcessorService.triggerManualProcessing();
+      
+      res.json({
+        success: true,
+        message: 'Enhanced email processing completed',
+        processed: result.processed,
+        cargoCreated: result.cargoCreated,
+        vesselCreated: result.vesselCreated,
+        errors: result.errors,
+        skipped: result.skipped,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // Get processing statistics
 router.get('/stats',
   strictRateLimiter,
   authenticate,
   async (_req: Request, res: Response, next: NextFunction) => {
     try {
-      const stats = await emailProcessingService.getProcessingStats();
+      const stats = await automatedProcessorService.getProcessingStats();
       
       res.json({
         success: true,
         data: stats,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Start automated processing (admin only)
+router.post('/start-automation',
+  strictRateLimiter,
+  authenticate,
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      automatedProcessorService.startAutomaticProcessing();
+      
+      res.json({
+        success: true,
+        message: 'Automated email processing started - will run every 5 minutes',
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

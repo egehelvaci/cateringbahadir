@@ -1,0 +1,16 @@
+{
+  "cargoProfile": {
+    "avgCargoScore": 5.045454545454546,
+    "avgVesselScore": 2.4545454545454546,
+    "hasTonnageRate": 0.9696969696969697,
+    "hasVesselNameRate": 0
+  },
+  "vesselProfile": {
+    "avgCargoScore": 2.1333333333333333,
+    "avgVesselScore": 8.866666666666667,
+    "hasTonnageRate": 1,
+    "hasVesselNameRate": 0.6
+  },
+  "threshold": 0.5,
+  "version": "1.0.0"
+}
