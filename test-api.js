@@ -15,8 +15,12 @@ async function testAutoMatchAPI() {
       filename: 'real-mail-export.txt',
       contentType: 'text/plain'
     });
-    form.append('minMatchScore', '60');
-    form.append('maxLaycanGapDays', '5');
+    // Optimal parametreler
+    form.append('minMatchScore', '68');
+    form.append('maxLaycanGapDays', '3');
+    form.append('maxDistanceDays', '2.0');
+    form.append('maxOversizeRatio', '0.32');
+    form.append('routeFactor', '1.18');
 
     console.log('📤 API çağrısı yapılıyor...');
 
@@ -57,10 +61,25 @@ async function testAutoMatchAPI() {
       if (result.data.matches.length > 0) {
         console.log('🎯 Eşleştirme Sonuçları:');
         result.data.matches.forEach((match, index) => {
-          console.log(`   ${index + 1}. ${match.vessel.name} ↔ ${match.cargo.reference}`);
-          console.log(`      Skor: ${match.matchScore}/100`);
-          console.log(`      Öneri: ${match.recommendation}`);
-          console.log(`      Gerekçe: ${match.reason}\n`);
+          console.log(`\n   ${index + 1}. 🚢 ${match.vessel.name} ↔ 📦 ${match.cargo.reference}`);
+          console.log(`      📊 Skor: ${match.matchScore}/100 (${match.recommendation})`);
+          console.log(`      📍 ${match.vessel.currentPort} → ${match.cargo.loadPort}`);
+          console.log(`      ⚖️  Tonaj: ${match.compatibility.tonnage.cargoSize} / ${match.compatibility.tonnage.vesselCapacity} (${match.compatibility.tonnage.utilization})`);
+          
+          // Mail bilgileri
+          console.log(`      📧 Gemi Maili: "${match.vessel.sourceMail.subject}" - ${match.vessel.sourceMail.sender}`);
+          console.log(`      📧 Yük Maili: "${match.cargo.sourceMail.subject}" - ${match.cargo.sourceMail.sender}`);
+          
+          // Uyumluluk detayları
+          if (match.compatibility.requirements.missing.length > 0) {
+            console.log(`      ⚠️  Eksik Gereksinimler: ${match.compatibility.requirements.missing.join(', ')}`);
+          }
+          
+          if (match.compatibility.volume) {
+            console.log(`      📦 Hacim: ${match.compatibility.volume.needed} / ${match.compatibility.volume.available} CUFT (${match.compatibility.volume.utilization})`);
+          }
+          
+          console.log(`      💡 ${match.reason}`);
         });
       } else {
         console.log('❌ Hiç eşleşme bulunamadı');

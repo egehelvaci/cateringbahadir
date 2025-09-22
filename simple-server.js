@@ -55,11 +55,19 @@ function parseMailContent(content) {
   const vessels = [];
   const cargos = [];
 
-  // Mail'leri satırlara böl
-  const lines = content.split('\n');
+  // Mail'leri ayır (MAIL 1, MAIL 2, etc.)
+  const mailSections = content.split(/MAIL \d+/i).filter(section => section.trim().length > 50);
   
-  // Gemi parsing - çoklu pattern'ler
-  const vesselPatterns = [
+  // Her mail section'ını işle
+  for (let mailIndex = 0; mailIndex < mailSections.length; mailIndex++) {
+    const mailContent = mailSections[mailIndex];
+    const lines = mailContent.split('\n');
+  
+    // Mail bilgilerini çıkar
+    const mailInfo = extractMailInfo(mailContent, mailIndex);
+    
+    // Gemi parsing - çoklu pattern'ler
+    const vesselPatterns = [
     // Gemi adları
     { pattern: /(?:M[\/.]?V\s+|mv\s+|VESSEL\s+)?([A-Z\s\d]+)(?:\s*-|\s*DWT|\s*twn)/i, type: 'name' },
     { pattern: /([A-Z]+)\s*(?:twn|bulk carrier|SID\/BOX)/i, type: 'name' },
@@ -218,7 +226,8 @@ function parseMailContent(content) {
           currentPort: currentVessel.currentPort || 'Unknown',
           grainCuft: currentVessel.grainCuft || null,
           speedKnots: currentVessel.speedKnots || 12,
-          features: currentVessel.features || []
+          features: currentVessel.features || [],
+          sourceMailInfo: mailInfo
         });
       }
     }
@@ -232,13 +241,44 @@ function parseMailContent(content) {
           quantity: currentCargo.quantity,
           loadPort: currentCargo.loadPort || 'Unknown',
           stowageFactorValue: currentCargo.stowageFactorValue || null,
-          requirements: currentCargo.requirements || []
+          requirements: currentCargo.requirements || [],
+          sourceMailInfo: mailInfo
         });
       }
     }
   }
+  }
 
   return { vessels, cargos };
+}
+
+// Mail bilgilerini çıkarır
+function extractMailInfo(mailContent, mailIndex) {
+  const lines = mailContent.split('\n');
+  let subject = '';
+  let sender = '';
+  let date = '';
+  
+  // Mail başlığı bilgilerini ara
+  for (const line of lines) {
+    if (line.includes('Gönderen:') || line.includes('From:')) {
+      sender = line.replace(/.*(?:Gönderen:|From:)\s*/, '').replace(/[<>]/g, '').trim();
+    }
+    if (line.includes('Konu:') || line.includes('Subject:')) {
+      subject = line.replace(/.*(?:Konu:|Subject:)\s*/, '').trim();
+    }
+    if (line.includes('Alındığı Tarih:') || line.includes('Date:')) {
+      date = line.replace(/.*(?:Alındığı Tarih:|Date:)\s*/, '').trim();
+    }
+  }
+  
+  return {
+    mailIndex: mailIndex + 1,
+    subject: subject || `Mail ${mailIndex + 1}`,
+    sender: sender || 'Bilinmeyen',
+    date: date || 'Tarih yok',
+    preview: mailContent.substring(0, 200).replace(/\n/g, ' ').trim() + '...'
+  };
 }
 
 // Basit eşleştirme algoritması
@@ -292,13 +332,65 @@ function matchVesselsCargos(vessels, cargos) {
 
       if (score >= 60) {
         matches.push({
-          vessel: vessel,
-          cargo: cargo,
+          matchId: `${vessel.name.replace(/\s/g, '')}-${cargo.reference.replace(/\s/g, '').substring(0, 10)}`,
           matchScore: score,
           recommendation: score >= 90 ? 'Mükemmel Eşleşme' :
                          score >= 80 ? 'Çok İyi Eşleşme' :
                          score >= 70 ? 'İyi Eşleşme' : 'Kabul Edilebilir',
-          reason: reasons.join('; ')
+          reason: reasons.join('; '),
+          vessel: {
+            name: vessel.name,
+            dwt: vessel.dwt,
+            currentPort: vessel.currentPort,
+            speedKnots: vessel.speedKnots,
+            features: vessel.features,
+            capacity: {
+              grain: vessel.grainCuft,
+              bale: vessel.baleCuft
+            },
+            sourceMail: {
+              subject: vessel.sourceMailInfo.subject,
+              sender: vessel.sourceMailInfo.sender,
+              date: vessel.sourceMailInfo.date,
+              mailNumber: vessel.sourceMailInfo.mailIndex,
+              preview: vessel.sourceMailInfo.preview
+            }
+          },
+          cargo: {
+            reference: cargo.reference,
+            quantity: cargo.quantity,
+            loadPort: cargo.loadPort,
+            dischargePort: cargo.dischargePort || 'Belirtilmemiş',
+            stowageFactor: cargo.stowageFactorValue,
+            requirements: cargo.requirements,
+            sourceMail: {
+              subject: cargo.sourceMailInfo.subject,
+              sender: cargo.sourceMailInfo.sender,
+              date: cargo.sourceMailInfo.date,
+              mailNumber: cargo.sourceMailInfo.mailIndex,
+              preview: cargo.sourceMailInfo.preview
+            }
+          },
+          compatibility: {
+            tonnage: {
+              suitable: cargo.quantity <= vessel.dwt && (cargo.quantity / vessel.dwt) >= 0.65,
+              utilization: `${Math.round((cargo.quantity / vessel.dwt) * 100)}%`,
+              cargoSize: `${cargo.quantity.toLocaleString()} MT`,
+              vesselCapacity: `${vessel.dwt.toLocaleString()} DWT`
+            },
+            requirements: {
+              suitable: cargo.requirements.length === 0 || cargo.requirements.every(req => vessel.features.includes(req)),
+              cargoNeeds: cargo.requirements,
+              vesselFeatures: vessel.features,
+              missing: cargo.requirements.filter(req => !vessel.features.includes(req))
+            },
+            volume: cargo.stowageFactorValue && vessel.grainCuft ? {
+              suitable: (cargo.quantity * cargo.stowageFactorValue * 1.05) <= vessel.grainCuft,
+              utilization: `${Math.round(((cargo.quantity * cargo.stowageFactorValue * 1.05) / vessel.grainCuft) * 100)}%`,
+              needed: Math.round(cargo.quantity * cargo.stowageFactorValue * 1.05),
+              available: vessel.grainCuft
+            } : null
+          }
         });
       }
     }

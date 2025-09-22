@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚢 Gemi-Yük Otomatik Eşleştirme</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }
+        
+        .upload-area {
+            border: 2px dashed #007bff;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .upload-area:hover {
+            background-color: #f8f9fa;
+            border-color: #0056b3;
+        }
+        
+        .upload-area.dragover {
+            background-color: #e3f2fd;
+            border-color: #1976d2;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .match-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 15px 0;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .match-card.high-score {
+            background: linear-gradient(135deg, #e8f5e8, #f0f8f0);
+            border-color: #28a745;
+        }
+        
+        .match-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .score-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        
+        .score-high { background: #28a745; color: white; }
+        .score-medium { background: #ffc107; color: #333; }
+        
+        .mail-info {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 0.9em;
+        }
+        
+        .compatibility-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .compat-item {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .compat-item.suitable {
+            border-left-color: #28a745;
+            background: #f1f8e9;
+        }
+        
+        .compat-item.unsuitable {
+            border-left-color: #dc3545;
+            background: #fdf2f2;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .summary-item {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .summary-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚢 Gemi-Yük Otomatik Eşleştirme</h1>
+        <p>Mail export dosyanızı yükleyerek otomatik gemi-yük eşleştirmesi yapın</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <input type="file" id="fileInput" accept=".txt,.docx,.doc" style="display: none;">
+            <div id="uploadText">
+                📁 Dosya yüklemek için tıklayın veya sürükleyip bırakın<br>
+                <small>Desteklenen formatlar: TXT, DOC, DOCX (Max: 50MB)</small>
+            </div>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <h3>⚙️ Eşleştirme Parametreleri</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div>
+                    <label>Minimum Skor:</label>
+                    <input type="number" id="minScore" value="68" min="50" max="100">
+                </div>
+                <div>
+                    <label>Max Laycan Farkı (gün):</label>
+                    <input type="number" id="maxLaycanGap" value="3" min="1" max="10">
+                </div>
+                <div>
+                    <label>Max Seyir Süresi (gün):</label>
+                    <input type="number" id="maxDistance" value="2.0" min="0.5" max="5.0" step="0.1">
+                </div>
+                <div>
+                    <label>Max Gemi Büyüklük Oranı:</label>
+                    <input type="number" id="maxOversize" value="0.32" min="0.1" max="0.5" step="0.01">
+                </div>
+                <div>
+                    <label>Rota Faktörü:</label>
+                    <input type="number" id="routeFactor" value="1.18" min="1.0" max="2.0" step="0.01">
+                </div>
+            </div>
+        </div>
+        
+        <button id="matchButton" class="btn" disabled>
+            🎯 Eşleştirme Yap
+        </button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.getElementById('uploadArea');
+        const uploadText = document.getElementById('uploadText');
+        const matchButton = document.getElementById('matchButton');
+        const resultsDiv = document.getElementById('results');
+        
+        let selectedFile = null;
+
+        // Dosya seçimi
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                selectedFile = file;
+                uploadText.innerHTML = `✅ ${file.name} seçildi<br><small>${(file.size / 1024 / 1024).toFixed(2)} MB</small>`;
+                matchButton.disabled = false;
+            }
+        });
+
+        // Drag & Drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                selectedFile = file;
+                uploadText.innerHTML = `✅ ${file.name} seçildi<br><small>${(file.size / 1024 / 1024).toFixed(2)} MB</small>`;
+                matchButton.disabled = false;
+            }
+        });
+
+        // API çağrısı
+        matchButton.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            matchButton.disabled = true;
+            matchButton.innerHTML = '<span class="loading"></span> İşleniyor...';
+            resultsDiv.innerHTML = '';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('minMatchScore', document.getElementById('minScore').value);
+                formData.append('maxLaycanGapDays', document.getElementById('maxLaycanGap').value);
+                formData.append('maxDistanceDays', document.getElementById('maxDistance').value);
+                formData.append('maxOversizeRatio', document.getElementById('maxOversize').value);
+                formData.append('routeFactor', document.getElementById('routeFactor').value);
+
+                const response = await fetch('http://localhost:3001/api/auto-match', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    displayResults(result.data);
+                } else {
+                    resultsDiv.innerHTML = `<div style="color: red;">❌ Hata: ${result.message}</div>`;
+                }
+
+            } catch (error) {
+                resultsDiv.innerHTML = `<div style="color: red;">💥 Bağlantı hatası: ${error.message}</div>`;
+            } finally {
+                matchButton.disabled = false;
+                matchButton.innerHTML = '🎯 Eşleştirme Yap';
+            }
+        });
+
+        function displayResults(data) {
+            const { summary, matches } = data;
+            
+            let html = `
+                <h2>📊 Sonuç Özeti</h2>
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <div class="summary-number">${summary.vesselsFound}</div>
+                        <div>🚢 Gemi</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-number">${summary.cargosFound}</div>
+                        <div>📦 Yük</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-number">${summary.totalMatches}</div>
+                        <div>🎯 Eşleşme</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-number">${summary.processingTime}</div>
+                        <div>⚡ İşlem Süresi</div>
+                    </div>
+                </div>
+            `;
+
+            if (matches.length > 0) {
+                html += '<h2>🎯 Eşleştirme Sonuçları</h2>';
+                
+                matches.forEach((match, index) => {
+                    const scoreClass = match.matchScore >= 80 ? 'high-score' : '';
+                    const scoreBadgeClass = match.matchScore >= 80 ? 'score-high' : 'score-medium';
+                    
+                    html += `
+                        <div class="match-card ${scoreClass}">
+                            <div class="match-header">
+                                <h3>${match.vessel.name} ↔ ${match.cargo.reference}</h3>
+                                <span class="score-badge ${scoreBadgeClass}">
+                                    ${match.matchScore}/100
+                                </span>
+                            </div>
+                            
+                            <div style="margin: 15px 0;">
+                                <strong>📍 Rota:</strong> ${match.vessel.currentPort} → ${match.cargo.loadPort}
+                                <br>
+                                <strong>🎯 Değerlendirme:</strong> ${match.recommendation}
+                                <br>
+                                <strong>💡 Gerekçe:</strong> ${match.reason}
+                            </div>
+
+                            <div class="compatibility-grid">
+                                <div class="compat-item ${match.compatibility.tonnage.suitable ? 'suitable' : 'unsuitable'}">
+                                    <strong>⚖️ Tonaj Uyumu</strong><br>
+                                    ${match.compatibility.tonnage.cargoSize} / ${match.compatibility.tonnage.vesselCapacity}<br>
+                                    <small>Doluluk: ${match.compatibility.tonnage.utilization}</small>
+                                </div>
+                                
+                                <div class="compat-item ${match.compatibility.requirements.suitable ? 'suitable' : 'unsuitable'}">
+                                    <strong>🔧 Gereksinimler</strong><br>
+                                    İhtiyaç: ${match.compatibility.requirements.cargoNeeds.join(', ') || 'Yok'}<br>
+                                    <small>Gemi: ${match.compatibility.requirements.vesselFeatures.join(', ') || 'Yok'}</small>
+                                </div>
+                                
+                                ${match.compatibility.volume ? `
+                                <div class="compat-item ${match.compatibility.volume.suitable ? 'suitable' : 'unsuitable'}">
+                                    <strong>📦 Hacim Uyumu</strong><br>
+                                    ${match.compatibility.volume.needed.toLocaleString()} / ${match.compatibility.volume.available.toLocaleString()} CUFT<br>
+                                    <small>Doluluk: ${match.compatibility.volume.utilization}</small>
+                                </div>
+                                ` : ''}
+                            </div>
+
+                            <details style="margin-top: 15px;">
+                                <summary style="cursor: pointer; font-weight: bold;">📧 Mail Detayları</summary>
+                                
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
+                                    <div class="mail-info">
+                                        <strong>🚢 Gemi Maili (Mail ${match.vessel.sourceMail.mailNumber})</strong><br>
+                                        <strong>Konu:</strong> ${match.vessel.sourceMail.subject}<br>
+                                        <strong>Gönderen:</strong> ${match.vessel.sourceMail.sender}<br>
+                                        <strong>Tarih:</strong> ${match.vessel.sourceMail.date}<br>
+                                        <small>${match.vessel.sourceMail.preview}</small>
+                                    </div>
+                                    
+                                    <div class="mail-info">
+                                        <strong>📦 Yük Maili (Mail ${match.cargo.sourceMail.mailNumber})</strong><br>
+                                        <strong>Konu:</strong> ${match.cargo.sourceMail.subject}<br>
+                                        <strong>Gönderen:</strong> ${match.cargo.sourceMail.sender}<br>
+                                        <strong>Tarih:</strong> ${match.cargo.sourceMail.date}<br>
+                                        <small>${match.cargo.sourceMail.preview}</small>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+                    `;
+                });
+            } else {
+                html += `
+                    <div style="text-align: center; padding: 40px; color: #666;">
+                        ❌ Hiç eşleştirme bulunamadı<br>
+                        <small>Parametreleri düşürmeyi deneyin</small>
+                    </div>
+                `;
+            }
+
+            resultsDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
