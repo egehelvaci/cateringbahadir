@@ -167,16 +167,10 @@ export class MailExportService {
       content += `Oluşturulma Tarihi: ${email.createdAt.toLocaleString('tr-TR')}\n`;
       content += `Gmail ID: ${email.gmailId || 'Yok'}\n`;
       content += `Thread ID: ${email.threadId || 'Yok'}\n`;
-      content += `İşlenmiş Tip: ${email.parsedType || 'İşlenmemiş'}\n`;
+      content += `Durum: Ham Mail (AI işleme yok)\n`;
       
       if (email.labelIds) {
         content += `Etiketler: ${JSON.stringify(email.labelIds)}\n`;
-      }
-
-      // İşlenmiş JSON verisi varsa göster
-      if (email.parsedJson) {
-        content += `\nİşlenmiş Veri:\n`;
-        content += JSON.stringify(email.parsedJson, null, 2) + '\n';
       }
 
       // Raw içerik varsa göster (opsiyonel)
@@ -194,14 +188,7 @@ export class MailExportService {
     content += 'ÖZET\n';
     content += '='.repeat(40) + '\n';
     content += `Toplam Mail: ${emails.length}\n`;
-    
-    const cargoCount = emails.filter(e => e.parsedType === 'CARGO').length;
-    const vesselCount = emails.filter(e => e.parsedType === 'VESSEL').length;
-    const unprocessedCount = emails.filter(e => !e.parsedType).length;
-    
-    content += `Kargo Mailleri: ${cargoCount}\n`;
-    content += `Gemi Mailleri: ${vesselCount}\n`;
-    content += `İşlenmemiş Mailler: ${unprocessedCount}\n`;
+    content += `Durum: Tüm mailler ham olarak kaydedildi (AI işleme yok)\n`;
     
     // Tarih aralığı
     if (emails.length > 0) {
@@ -239,23 +226,17 @@ export class MailExportService {
     try {
       const [
         totalEmails,
-        cargoEmails,
-        vesselEmails,
-        unprocessedEmails,
         recentExports
       ] = await Promise.all([
         prisma.inboundEmail.count(),
-        prisma.inboundEmail.count({ where: { parsedType: 'CARGO' } }),
-        prisma.inboundEmail.count({ where: { parsedType: 'VESSEL' } }),
-        prisma.inboundEmail.count({ where: { parsedType: null } }),
         this.getRecentExports()
       ]);
 
       return {
         totalEmails,
-        cargoEmails,
-        vesselEmails,
-        unprocessedEmails,
+        cargoEmails: 0, // AI classification removed
+        vesselEmails: 0, // AI classification removed
+        unprocessedEmails: 0, // All emails are now "unprocessed" (no AI)
         recentExports,
         exportDirectory: this.exportDir
       };

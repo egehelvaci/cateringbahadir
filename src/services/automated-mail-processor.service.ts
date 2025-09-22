@@ -1,9 +1,6 @@
 import { prisma } from '../config/database';
-import { AIClassificationService } from './ai-classification.service';
-import { OpenAIService } from './openai.service';
 import { logger } from '../utils/logger';
-import { getEmailClassifier } from './ml/emailClassifier';
-import cron from 'node-cron';
+// AI services removed - no longer needed
 
 interface ProcessingStats {
   processed: number;
@@ -14,28 +11,17 @@ interface ProcessingStats {
 }
 
 export class AutomatedMailProcessorService {
-  private aiClassification: AIClassificationService;
-  private openaiService: OpenAIService;
   private isProcessing: boolean = false;
 
   constructor() {
-    this.aiClassification = new AIClassificationService();
-    this.openaiService = new OpenAIService();
+    // AI services removed - no longer needed
   }
 
   /**
    * Start automatic mail processing with cron job
    */
   startAutomaticProcessing(): void {
-    // Process emails every 5 minutes
-    cron.schedule('*/5 * * * *', async () => {
-      if (!this.isProcessing) {
-        logger.info('Starting scheduled email processing');
-        await this.processAllUnprocessedEmails();
-      }
-    });
-
-    logger.info('Automated mail processor started - will run every 5 minutes');
+    logger.info('Automated mail processor disabled - AI processing removed');
   }
 
   /**

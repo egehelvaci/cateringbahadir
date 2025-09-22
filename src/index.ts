@@ -113,12 +113,8 @@ const startServer = async () => {
       logger.info('IMAP polling service started - emails will be automatically saved to database');
     }
 
-    // Start automated mail processor for classification and data extraction
-    const mailProcessor = new AutomatedMailProcessorService();
-    if (process.env.NODE_ENV === 'production' || process.env.ENABLE_MAIL_PROCESSING === 'true') {
-      mailProcessor.startAutomaticProcessing();
-      logger.info('Automated mail processor started - emails will be automatically classified and processed');
-    }
+    // Automated mail processor disabled - AI processing removed
+    logger.info('Automated mail processor disabled - AI processing removed');
     
     app.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);

@@ -2,9 +2,7 @@ const Imap = require('imap');
 const { simpleParser } = require('mailparser');
 import { logger } from '../utils/logger';
 import { prisma } from '../config/database';
-import { AIClassificationService } from './ai-classification.service';
-import { OpenAIService } from './openai.service';
-import { AIMatchingService } from './ai-matching.service';
+// AI services removed - no longer needed
 import { MailType } from '@prisma/client';
 
 interface EmailMessage {
@@ -20,9 +18,6 @@ interface EmailMessage {
 
 export class ImapGmailService {
   private imap: any;
-  private aiClassifier: AIClassificationService;
-  private openaiService: OpenAIService;
-  private aiMatchingService: AIMatchingService;
 
   constructor(email: string, appPassword: string) {
     this.imap = new Imap({
@@ -36,9 +31,7 @@ export class ImapGmailService {
       }
     });
     
-    this.aiClassifier = new AIClassificationService();
-    this.openaiService = new OpenAIService();
-    this.aiMatchingService = new AIMatchingService();
+    // AI services removed - no longer needed
   }
 
   async connect(): Promise<void> {
@@ -171,10 +164,8 @@ export class ImapGmailService {
   private async processMessages(messages: EmailMessage[], filterCatering: boolean, saveToDb: boolean, resolve: any): Promise<void> {
     let filteredMessages = messages;
     
-    if (filterCatering) {
-      filteredMessages = messages.filter(msg => this.isCateringRelated(msg));
-      logger.info(`Filtered ${messages.length} messages to ${filteredMessages.length} catering/broker related messages`);
-    }
+    // No filtering - save all messages
+    logger.info(`Processing all ${messages.length} messages without filtering`);
     
     // Save to database if requested
     if (saveToDb) {
@@ -185,79 +176,7 @@ export class ImapGmailService {
     resolve(filteredMessages);
   }
 
-  private isCateringRelated(message: EmailMessage): boolean {
-    // Null checks
-    if (!message || !message.subject || !message.from) {
-      return false;
-    }
-
-    const businessKeywords = [
-      // Highly specific catering terms
-      'catering', 'cater', 'banquet', 'buffet', 'wedding catering', 'event catering',
-      'corporate catering', 'outdoor catering', 'food service', 'kitchen rental',
-      'chef service', 'menu planning', 'event planning',
-      
-      // Highly specific shipping/broker terms
-      'shipbroker', 'ship broker', 'vessel charter', 'cargo charter', 'bulk carrier',
-      'freight rate', 'laytime', 'demurrage', 'charter party', 'bill of lading',
-      'cargo discharge', 'cargo loading', 'port operation', 'maritime transport',
-      'dry bulk', 'wet bulk', 'fixture', 'tonnage', 'dwt', 'grt',
-      
-      // Turkish specific business terms
-      'catering hizmeti', 'yemek servisi', 'organizasyon', 'düğün organizasyonu',
-      'gemi kiralama', 'navlun oranı', 'liman operasyonu', 'yük taşımacılığı',
-      
-      // Your company specific
-      'edessoy', 'chartering@edessoy.com', 'catering@edessoy.com',
-      
-      // Very specific commercial terms (but more restrictive)
-      'charter agreement', 'catering contract', 'freight contract',
-      'shipping invoice', 'catering invoice', 'maritime service'
-    ];
-
-    const searchText = `${message.subject || ''} ${message.from || ''} ${message.body || ''}`.toLowerCase();
-    
-    // Check if any business keyword exists
-    const hasKeyword = businessKeywords.some(keyword => 
-      searchText.includes(keyword.toLowerCase())
-    );
-
-    // Additional checks for email patterns
-    const fromDomain = (message.from || '').toLowerCase();
-    const isBusinessEmail = !fromDomain.includes('noreply') && 
-                           !fromDomain.includes('no-reply') &&
-                           !fromDomain.includes('newsletter') &&
-                           !fromDomain.includes('marketing') &&
-                           !fromDomain.includes('notification');
-
-    // Blacklist - domains and terms to always exclude
-    const blacklistedDomains = [
-      'temu', 'amazon', 'aliexpress', 'ebay', 'shopify', 'alibaba',
-      'newsletter', 'noreply', 'no-reply', 'marketing', 'promotions',
-      'deals', 'offers', 'sales', 'discount', 'shopping', 'commerce'
-    ];
-
-    const isBlacklisted = blacklistedDomains.some(domain => 
-      fromDomain.includes(domain) || searchText.includes(domain)
-    );
-
-    // Filter out obvious spam/promotional emails
-    const subjectLower = (message.subject || '').toLowerCase();
-    const isSpam = subjectLower.includes('unsubscribe') ||
-                   subjectLower.includes('promotion') ||
-                   subjectLower.includes('sale') ||
-                   subjectLower.includes('offer') ||
-                   subjectLower.includes('discount') ||
-                   subjectLower.includes('%') ||
-                   subjectLower.includes('free') ||
-                   subjectLower.includes('win') ||
-                   subjectLower.includes('prize') ||
-                   subjectLower.includes('hediye') ||
-                   subjectLower.includes('indirim') ||
-                   subjectLower.includes('kampanya');
-
-    return hasKeyword && isBusinessEmail && !isSpam && !isBlacklisted;
-  }
+  // AI filtering removed - no longer needed
 
   private async saveMessagesToDatabase(messages: EmailMessage[]): Promise<void> {
     try {
@@ -279,45 +198,12 @@ export class ImapGmailService {
         });
 
         if (!existing) {
-          // Use AI classification to determine email type
-          let aiClassification = null;
+          // Simplified mail processing - no AI classification
           let emailType: MailType | null = null;
           let parsedJson = null;
           
-          if (this.isCateringRelated(message)) {
-            try {
-              aiClassification = await this.aiClassifier.classifyEmail(
-                message.subject,
-                message.body,
-                message.from
-              );
-              
-              if (aiClassification.type !== 'UNKNOWN' && aiClassification.confidence > 0.25) {
-                emailType = aiClassification.type === 'CARGO' ? MailType.CARGO : MailType.VESSEL;
-                
-                // Extract structured data using OpenAI
-                try {
-                  const extraction = await this.openaiService.extractFromEmail(message.body);
-                  parsedJson = extraction;
-                  
-                  // Save to appropriate table (Cargo or Vessel)
-                  await this.saveToSpecificTable(extraction);
-                  
-                  logger.info(`Successfully classified and saved ${aiClassification.type} from email "${message.subject}"`);
-                } catch (extractError) {
-                  logger.warn(`Failed to extract structured data from email "${message.subject}":`, extractError);
-                  // Continue with just the classification
-                }
-              } else {
-                logger.debug(`Email "${message.subject}" classification uncertain (${aiClassification.type}, confidence: ${aiClassification.confidence})`);
-              }
-              
-              logger.info(`AI classified email "${message.subject}" as ${aiClassification.type} (confidence: ${aiClassification.confidence})`);
-            } catch (error) {
-              logger.error('AI classification failed, using fallback:', error);
-              emailType = MailType.CARGO; // Default fallback
-            }
-          }
+          // Just save the raw email without AI processing
+          logger.info(`Saving email "${message.subject}" without AI processing`);
 
           const savedEmail = await prisma.inboundEmail.create({
             data: {
@@ -443,111 +329,7 @@ export class ImapGmailService {
     return null;
   }
 
-  /**
-   * Save extracted data to specific table (Cargo or Vessel)
-   */
-  private async saveToSpecificTable(extraction: any): Promise<void> {
-    try {
-      if (extraction.type === 'CARGO') {
-        const cargoData = extraction.data;
-
-        // Generate embedding for matching
-        const embeddingText = this.openaiService.generateEmbeddingText('CARGO', cargoData);
-        const embedding = await this.openaiService.generateEmbedding(embeddingText);
-
-        const savedCargo = await prisma.cargo.create({
-          data: {
-            commodity: cargoData.commodity,
-            qtyValue: cargoData.qtyValue || null,
-            qtyUnit: cargoData.qtyUnit || null,
-            loadPort: cargoData.loadPort || null,
-            dischargePort: cargoData.dischargePort || null,
-            laycanStart: cargoData.laycanStart ? new Date(cargoData.laycanStart) : null,
-            laycanEnd: cargoData.laycanEnd ? new Date(cargoData.laycanEnd) : null,
-            notes: cargoData.notes || null,
-            embedding: Buffer.from(new Float32Array(embedding).buffer),
-            
-            // Yeni alanlar
-            cargoType: cargoData.cargoType || null,
-            loadingType: cargoData.loadingType || null,
-            loadingRate: cargoData.loadingRate || null,
-            dischargingRate: cargoData.dischargingRate || null,
-            commission: cargoData.commission || null,
-            vesselDwtMin: cargoData.vesselDwtMin || null,
-            vesselDwtMax: cargoData.vesselDwtMax || null,
-            vesselType: cargoData.vesselType || null,
-            
-            // İlave detaylar
-            charterer: cargoData.charterer || null,
-            freightIdea: cargoData.freightIdea || null,
-            maxAge: cargoData.maxAge || null,
-            excludeFlags: cargoData.excludeFlags || null,
-            craneCap: cargoData.craneCap || null,
-            specialRequirements: cargoData.specialRequirements || null,
-            vesselShape: cargoData.vesselShape || null,
-            maxDiameter: cargoData.maxDiameter || null,
-            maxLength: cargoData.maxLength || null,
-            transshipment: cargoData.transshipment || null,
-          },
-        });
-
-        logger.info(`Saved cargo: ${cargoData.commodity} from ${cargoData.loadPort} to ${cargoData.dischargePort}`);
-        
-        // 🚀 Otomatik matching başlat
-        setImmediate(() => {
-          this.aiMatchingService.triggerMatchingForNewCargo(savedCargo.id)
-            .catch(error => logger.error('Auto-matching failed for cargo:', error));
-        });
-
-      } else if (extraction.type === 'VESSEL') {
-        const vesselData = extraction.data;
-
-        // Generate embedding for matching
-        const embeddingText = this.openaiService.generateEmbeddingText('VESSEL', vesselData);
-        const embedding = await this.openaiService.generateEmbedding(embeddingText);
-
-        const savedVessel = await prisma.vessel.create({
-          data: {
-            name: vesselData.name || null,
-            imo: vesselData.imo || null,
-            dwt: vesselData.dwt || null,
-            capacityTon: vesselData.capacityTon || null,
-            capacityM3: vesselData.capacityM3 || null,
-            currentArea: vesselData.currentArea || null,
-            availableFrom: vesselData.availableFrom ? new Date(vesselData.availableFrom) : null,
-            gear: vesselData.gear || null,
-            notes: vesselData.notes || null,
-            embedding: Buffer.from(new Float32Array(embedding).buffer),
-            
-            // Yeni vessel alanları
-            vesselType: vesselData.vesselType || null,
-            builtYear: vesselData.builtYear || null,
-            flag: vesselData.flag || null,
-            loa: vesselData.loa || null,
-            beam: vesselData.beam || null,
-            draft: vesselData.draft || null,
-            grt: vesselData.grt || null,
-            nrt: vesselData.nrt || null,
-            holds: vesselData.holds || null,
-            hatches: vesselData.hatches || null,
-            cranes: vesselData.cranes || null,
-            teu: vesselData.teu || null,
-          },
-        });
-
-        logger.info(`Saved vessel: ${vesselData.name || 'Unknown'} (${vesselData.dwt || 'N/A'} DWT) in ${vesselData.currentArea || 'Unknown area'}`);
-        
-        // 🚀 Otomatik matching başlat
-        setImmediate(() => {
-          this.aiMatchingService.triggerMatchingForNewVessel(savedVessel.id)
-            .catch(error => logger.error('Auto-matching failed for vessel:', error));
-        });
-      }
-    } catch (error) {
-      logger.error('Error saving to specific table:', error);
-      throw error;
-    }
-  }
+  // AI-specific table saving removed - no longer needed
 
   static async testConnection(email: string, appPassword: string): Promise<boolean> {
     try {

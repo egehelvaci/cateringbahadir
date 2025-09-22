@@ -1,0 +1,279 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id      BigInt @id @default(autoincrement())
+  name    String
+  users   User[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id         BigInt  @id @default(autoincrement())
+  companyId  BigInt
+  email      String  @unique
+  name       String?
+  password   String
+  company    Company @relation(fields: [companyId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GoogleAccount {
+  id              Int      @id @default(autoincrement())
+  email           String   @unique
+  accessToken     String
+  refreshToken    String
+  scope           String?
+  tokenType       String?  @default("Bearer")
+  expiryDate      BigInt?  // ms epoch
+  historyId       String?  // incremental sync için
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model InboundEmail {
+  id          Int       @id @default(autoincrement())
+  messageId   String?   @unique
+  fromAddr    String?
+  subject     String?
+  receivedAt  DateTime?
+  raw         String?   @db.Text
+  parsedType  MailType?
+  parsedJson  Json?
+  gmailId     String?   // Gmail message id
+  threadId    String?   // Gmail thread id
+  labelIds    Json?     // Gmail labels
+  historyId   String?   // Gmail history id
+  createdAt   DateTime  @default(now())
+  
+  // Relations to extracted data
+  cargo       Cargo[]
+  vessel      Vessel[]
+}
+
+model Cargo {
+  id               Int       @id @default(autoincrement())
+  emailId          Int?      // Link to source email
+  commodity        String
+  qtyValue         Float?
+  qtyUnit          String?
+  loadPort         String?
+  dischargePort    String?
+  laycanStart      DateTime?
+  laycanEnd        DateTime?
+  notes            String?
+  embedding        Bytes?
+  
+  // Yeni alanlar
+  cargoType        String?   // PET, steel, grain, etc - daha spesifik yük tipi
+  loadingType      String?   // break bulk, container, bulk, etc
+  loadingRate      Float?    // ton/day
+  dischargingRate  Float?    // ton/day
+  commission       Float?    // percentage (3.75 for %3.75)
+  
+  // Vessel gereksinimleri
+  vesselDwtMin     Float?    // minimum DWT requirement
+  vesselDwtMax     Float?    // maximum DWT requirement
+  vesselType       String?   // Bulk Carrier, Container, Tanker, etc
+  
+  // İlave detaylar
+  charterer        String?   // Kiralayan firma (Interpipe)
+  freightIdea      String?   // Navlun beklentisi ("low 50")
+  maxAge           Int?      // Maksimum gemi yaşı (25 yıl)
+  excludeFlags     String?   // İstenmeyen bayraklar (Iran/Iraq)
+  craneCap         String?   // Vinç kapasitesi (4x30 MT SWL)
+  specialRequirements String? // Özel gereksinimler
+  vesselShape      String?   // Gemi ambar şekli (box-shaped)
+  maxDiameter      Float?    // Maksimum çap (mm)
+  maxLength        Float?    // Maksimum uzunluk (mm)
+  transshipment    Boolean?  // Ara yükleme var mı
+  
+  // Extracted data
+  extractedData    Json?     // Raw extracted data from AI
+  confidence       Float?    // Classification confidence
+  
+  createdAt        DateTime  @default(now())
+  sourceEmail      InboundEmail? @relation(fields: [emailId], references: [id])
+  matches          Match[]
+  
+  @@index([commodity])
+  @@index([cargoType])
+  @@index([laycanStart, laycanEnd])
+  @@index([vesselDwtMin, vesselDwtMax])
+  @@index([emailId])
+}
+
+model Vessel {
+  id            Int       @id @default(autoincrement())
+  emailId       Int?      // Link to source email
+  name          String?
+  imo           String?
+  dwt           Float?
+  capacityTon   Float?
+  capacityM3    Float?
+  currentArea   String?
+  availableFrom DateTime?
+  gear          String?
+  notes         String?
+  embedding     Bytes?
+  
+  // Vessel tipi ve özellikleri
+  vesselType    String?   // Bulk Carrier, Container, Tanker, General Cargo, etc
+  builtYear     Int?      // Yapım yılı
+  flag          String?   // Bayrak ülkesi
+  loa           Float?    // Length Overall (m)
+  beam          Float?    // Genişlik (m)
+  draft         Float?    // Draft (m)
+  grt           Float?    // Gross Tonnage
+  nrt           Float?    // Net Tonnage
+  holds         Int?      // Ambar sayısı
+  hatches       Int?      // Lük sayısı
+  cranes        String?   // Vinç bilgileri
+  teu           Int?      // Container kapasitesi (TEU)
+  
+  // Extracted data
+  extractedData Json?     // Raw extracted data from AI
+  confidence    Float?    // Classification confidence
+  
+  createdAt     DateTime  @default(now())
+  sourceEmail   InboundEmail? @relation(fields: [emailId], references: [id])
+  matches       Match[]
+  
+  @@index([availableFrom])
+  @@index([currentArea])
+  @@index([vesselType])
+  @@index([dwt])
+  @@index([emailId])
+}
+
+model Match {
+  id         Int         @id @default(autoincrement())
+  cargoId    Int
+  vesselId   Int
+  score      Float
+  reason     Json?
+  status     MatchStatus @default(SUGGESTED)
+  selected   Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+
+  cargo   Cargo  @relation(fields: [cargoId], references: [id])
+  vessel  Vessel @relation(fields: [vesselId], references: [id])
+
+  @@index([cargoId])
+  @@index([vesselId])
+  @@index([status])
+  @@index([score])
+}
+
+enum MailType {
+  CARGO
+  VESSEL
+}
+
+enum MatchStatus {
+  SUGGESTED
+  ACCEPTED
+  REJECTED
+}
+
+enum OrderStatus {
+  PENDING       // Beklemede
+  CONFIRMED     // Onaylandı
+  READY         // Hazır (tüm QR'lar ilk kez okutuldu)
+  DELIVERED     // Teslim edildi (tüm QR'lar ikinci kez okutuldu)
+  CANCELLED     // İptal edildi
+}
+
+model Order {
+  id          Int           @id @default(autoincrement())
+  orderNumber String        @unique
+  customerName String
+  customerPhone String?
+  totalAmount Float?
+  status      OrderStatus   @default(PENDING)
+  notes       String?
+  items       OrderItem[]
+  qrScans     QRScan[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  @@index([status])
+  @@index([orderNumber])
+}
+
+model OrderItem {
+  id          Int       @id @default(autoincrement())
+  orderId     Int
+  qrCode      String    @unique // Her item'ın benzersiz QR kodu
+  productName String
+  quantity    Int
+  price       Float?
+  firstScanAt DateTime? // İlk okutma zamanı
+  secondScanAt DateTime? // İkinci okutma zamanı
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  qrScans     QRScan[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([orderId])
+  @@index([qrCode])
+}
+
+model QRScan {
+  id          Int       @id @default(autoincrement())
+  orderId     Int
+  orderItemId Int
+  employeeId  Int?      // Okutmayı yapan çalışan
+  qrCode      String
+  scanType    Int       // 1: İlk okutma (hazırlama), 2: İkinci okutma (teslimat)
+  scannedBy   String?   // Kim tarafından okutuldu (eski alan, geriye uyumluluk için)
+  scannedAt   DateTime  @default(now())
+  
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  employee    Employee? @relation(fields: [employeeId], references: [id])
+  
+  @@index([orderId])
+  @@index([orderItemId])
+  @@index([qrCode])
+  @@index([employeeId])
+}
+
+model Employee {
+  id          Int       @id @default(autoincrement())
+  name        String
+  email       String?   @unique
+  phone       String?
+  department  String?   // Hazırlama, Teslimat, vb.
+  isActive    Boolean   @default(true)
+  qrScans     QRScan[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([department])
+  @@index([isActive])
+}
+
+model MicrosoftAccount {
+  id           BigInt   @id @default(autoincrement())
+  email        String   @unique
+  accessToken  String
+  refreshToken String?
+  scope        String
+  expiryDate   DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([email])
+  @@index([expiryDate])
+}
