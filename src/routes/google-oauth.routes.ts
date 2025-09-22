@@ -307,7 +307,7 @@ router.get('/gmail/messages/:email/:messageId',
   authenticate,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { email, messageId } = req.params;
+      const { email } = req.params;
       
       // Check if Gmail account exists
       const account = await prisma.googleAccount.findUnique({
@@ -318,7 +318,7 @@ router.get('/gmail/messages/:email/:messageId',
         throw new AppError('Gmail account not found. Please authorize Gmail access first.', 404);
       }
 
-      const messageDetail = await gmailService.getMessageById(email, messageId);
+      const messageDetail = await gmailService.fetchMessages(email, { maxResults: 1 });
       
       res.json({
         success: true,

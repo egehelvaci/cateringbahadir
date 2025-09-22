@@ -1,21 +1,15 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { prisma } from '../config/database';
 import { authenticate } from '../middleware/auth';
 import { strictRateLimiter } from '../middleware/rateLimiter';
-import { prisma } from '../config/database';
-import { AIClassificationService } from '../services/ai-classification.service';
-import { OpenAIService } from '../services/openai.service';
-import { logger } from '../utils/logger';
-import { reprocessInboxEmails } from '../scripts/reprocess-inbox-emails';
 
 const router = Router();
-const aiClassification = new AIClassificationService();
-const openaiService = new OpenAIService();
 
-// Debug: Get recent emails with classification info
-router.get('/emails/recent',
+// GET /debug/emails - Son 10 emaili göster
+router.get('/emails',
   strictRateLimiter,
   authenticate,
-  async (_req: Request, res: Response, next: NextFunction) => {
+  async (_req: Request, res: Response, _next: NextFunction) => {
     try {
       const emails = await prisma.inboundEmail.findMany({
         orderBy: { createdAt: 'desc' },
@@ -25,8 +19,6 @@ router.get('/emails/recent',
           fromAddr: true,
           subject: true,
           receivedAt: true,
-          parsedType: true,
-          parsedJson: true,
           raw: true,
           createdAt: true
         }
@@ -37,188 +29,74 @@ router.get('/emails/recent',
         ...email,
         raw: email.raw ? email.raw.substring(0, 500) + '...' : null,
         bodyPreview: email.raw ? 
-          email.raw.replace(/<[^>]*>/g, '').substring(0, 200) + '...' : 
-          null
+          email.raw.replace(/\n/g, ' ').substring(0, 200) + '...' : 
+          'No content'
       }));
 
       res.json({
         success: true,
-        data: cleanEmails,
-        timestamp: new Date().toISOString(),
+        data: {
+          emails: cleanEmails,
+          count: emails.length
+        },
+        timestamp: new Date().toISOString()
       });
+
     } catch (error) {
-      next(error);
+      _next(error);
     }
   }
 );
 
-// Debug: Get cargo and vessel counts
+// GET /debug/stats - Sistem istatistikleri
 router.get('/stats',
   strictRateLimiter,
   authenticate,
-  async (_req: Request, res: Response, next: NextFunction) => {
+  async (_req: Request, res: Response, _next: NextFunction) => {
     try {
-      const [
-        totalEmails,
-        processedEmails,
-        cargoEmails,
-        vesselEmails,
-        cargoCount,
-        vesselCount,
-        recentCargos,
-        recentVessels
-      ] = await Promise.all([
-        prisma.inboundEmail.count(),
-        prisma.inboundEmail.count({ where: { parsedType: { not: null } } }),
-        prisma.inboundEmail.count({ where: { parsedType: 'CARGO' } }),
-        prisma.inboundEmail.count({ where: { parsedType: 'VESSEL' } }),
-        prisma.cargo.count(),
-        prisma.vessel.count(),
-        prisma.cargo.findMany({
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-          select: {
-            id: true,
-            commodity: true,
-            qtyValue: true,
-            qtyUnit: true,
-            loadPort: true,
-            dischargePort: true,
-            createdAt: true
-          }
-        }),
-        prisma.vessel.findMany({
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-          select: {
-            id: true,
-            name: true,
-            dwt: true,
-            currentArea: true,
-            availableFrom: true,
-            createdAt: true
-          }
-        })
-      ]);
+      const totalEmails = await prisma.inboundEmail.count();
 
       res.json({
         success: true,
         data: {
           emails: {
-            total: totalEmails,
-            processed: processedEmails,
-            unprocessed: totalEmails - processedEmails,
-            cargoEmails,
-            vesselEmails
+            total: totalEmails
           },
-          records: {
-            cargoCount,
-            vesselCount
-          },
-          recent: {
-            cargos: recentCargos,
-            vessels: recentVessels
-          }
+          message: "AI processing disabled - only email statistics available"
         },
-        timestamp: new Date().toISOString(),
+        timestamp: new Date().toISOString()
       });
+
     } catch (error) {
-      next(error);
+      _next(error);
     }
   }
 );
 
-// Debug: Test classification on specific email
-router.post('/test-classification',
+// GET /debug/health - Sistem sağlık durumu
+router.get('/health',
   strictRateLimiter,
-  authenticate,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (_req: Request, res: Response, _next: NextFunction) => {
     try {
-      const { emailId } = req.body;
+      // Test database connection
+      await prisma.$queryRaw`SELECT 1`;
 
-      if (!emailId) {
-        res.status(400).json({
-          success: false,
-          message: 'Email ID is required'
-        });
-        return;
-      }
-
-      const email = await prisma.inboundEmail.findUnique({
-        where: { id: parseInt(emailId) }
-      });
-
-      if (!email) {
-        res.status(404).json({
-          success: false,
-          message: 'Email not found'
-        });
-        return;
-      }
-
-      // Test AI classification
-      const classification = await aiClassification.classifyEmail(
-        email.subject || '',
-        email.raw || '',
-        email.fromAddr || ''
-      );
-
-      // Test OpenAI extraction if classification is good
-      let extraction = null;
-      if (classification.type !== 'UNKNOWN' && classification.confidence > 0.3) {
-        try {
-          extraction = await openaiService.extractFromEmail(email.raw || '');
-        } catch (error) {
-          logger.error('OpenAI extraction failed:', error);
+      res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        database: 'connected',
+        services: {
+          imap: 'running',
+          mailProcessor: 'disabled'
         }
-      }
-
-      res.json({
-        success: true,
-        data: {
-          email: {
-            id: email.id,
-            subject: email.subject,
-            from: email.fromAddr,
-            currentType: email.parsedType
-          },
-          classification,
-          extraction,
-          wouldProcess: classification.type !== 'UNKNOWN' && classification.confidence > 0.3
-        },
-        timestamp: new Date().toISOString(),
       });
+
     } catch (error) {
-      next(error);
-    }
-  }
-);
-
-// Debug: Reprocess all inbox emails 
-router.post('/emails/reprocess-all',
-  strictRateLimiter,
-  authenticate,
-  async (_req: Request, res: Response, next: NextFunction) => {
-    try {
-      logger.info('Starting inbox reprocessing via API...');
-      
-      // Start reprocessing in background
-      reprocessInboxEmails()
-        .then(() => {
-          logger.info('Background reprocessing completed successfully');
-        })
-        .catch((error) => {
-          logger.error('Background reprocessing failed:', error);
-        });
-
-      res.json({
-        success: true,
-        message: 'Inbox reprocessing started in background. Check logs for progress.',
+      res.status(500).json({
+        status: 'unhealthy',
         timestamp: new Date().toISOString(),
+        error: (error as Error).message
       });
-      
-    } catch (error) {
-      next(error);
     }
   }
 );

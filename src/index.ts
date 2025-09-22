@@ -11,15 +11,13 @@ import { logger } from './utils/logger';
 import { prisma } from './config/database';
 // import { GmailPollingService } from './services/gmail-polling.service';
 import { ImapPollingService } from './services/imap-polling.service';
-import { AutomatedMailProcessorService } from './services/automated-mail-processor.service';
+// import { AutomatedMailProcessorService } from './services/automated-mail-processor.service'; // AI processing disabled
 
 import googleOAuthRoutes from './routes/google-oauth.routes';
 import authRoutes from './routes/auth.routes';
 import imapGmailRoutes from './routes/imap-gmail.routes';
 import manualEmailRoutes from './routes/manual-email.routes';
-import cargoRoutes from './routes/cargo.routes';
-import vesselRoutes from './routes/vessel.routes';
-import matchingRoutes from './routes/matching.routes';
+// AI-related routes removed
 import emailProcessingRoutes from './routes/email-processing.routes';
 import debugRoutes from './routes/debug.routes';
 import inboxRoutes from './routes/inbox.routes';
@@ -77,9 +75,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api', googleOAuthRoutes);
 app.use('/api', manualEmailRoutes);
 app.use('/api', imapGmailRoutes);
-app.use('/api', cargoRoutes);
-app.use('/api', vesselRoutes);
-app.use('/api', matchingRoutes);
+// AI-related routes removed
 app.use('/api/emails', emailProcessingRoutes);
 app.use('/api/debug', debugRoutes);
 app.use('/inbox', inboxRoutes);

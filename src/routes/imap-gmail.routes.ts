@@ -164,8 +164,6 @@ router.get('/inbox/emails',
             fromAddr: true,
             subject: true,
             receivedAt: true,
-            parsedType: true,
-            parsedJson: true,
             createdAt: true
           }
         }),

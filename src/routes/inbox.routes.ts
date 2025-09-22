@@ -49,8 +49,6 @@ router.get('/emails',
             fromAddr: true,
             subject: true,
             receivedAt: true,
-            parsedType: true,
-            parsedJson: true,
             createdAt: true,
             raw: true
           }
@@ -65,8 +63,8 @@ router.get('/emails',
         from: email.fromAddr,
         subject: email.subject,
         receivedAt: email.receivedAt,
-        type: email.parsedType,
-        classification: email.parsedJson,
+        type: 'RAW_EMAIL',
+        classification: null,
         createdAt: email.createdAt,
         preview: email.raw ? 
           email.raw
@@ -131,8 +129,8 @@ router.get('/emails/:id',
         from: email.fromAddr,
         subject: email.subject,
         receivedAt: email.receivedAt,
-        type: email.parsedType,
-        classification: email.parsedJson,
+        type: 'RAW_EMAIL',
+        classification: null,
         createdAt: email.createdAt,
         content: email.raw ? 
           email.raw
@@ -163,15 +161,9 @@ router.get('/stats',
     try {
       const [
         totalEmails,
-        cargoEmails,
-        vesselEmails,
-        unprocessedEmails,
         recentEmails
       ] = await Promise.all([
         prisma.inboundEmail.count(),
-        prisma.inboundEmail.count({ where: { parsedType: 'CARGO' } }),
-        prisma.inboundEmail.count({ where: { parsedType: 'VESSEL' } }),
-        prisma.inboundEmail.count({ where: { parsedType: null } }),
         prisma.inboundEmail.findMany({
           orderBy: { receivedAt: 'desc' },
           take: 5,
@@ -179,8 +171,7 @@ router.get('/stats',
             id: true,
             fromAddr: true,
             subject: true,
-            receivedAt: true,
-            parsedType: true
+            receivedAt: true
           }
         })
       ]);
@@ -190,11 +181,7 @@ router.get('/stats',
         data: {
           summary: {
             total: totalEmails,
-            cargo: cargoEmails,
-            vessel: vesselEmails,
-            unprocessed: unprocessedEmails,
-            processedPercentage: totalEmails > 0 ? 
-              Math.round(((cargoEmails + vesselEmails) / totalEmails) * 100) : 0
+            message: "AI processing disabled - only raw email statistics available"
           },
           recent: recentEmails
         },

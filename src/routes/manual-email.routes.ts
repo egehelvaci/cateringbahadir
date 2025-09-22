@@ -35,8 +35,6 @@ router.post('/email/upload',
           subject: subject,
           receivedAt: receivedAt ? new Date(receivedAt) : new Date(),
           raw: `Subject: ${subject}\nFrom: ${from}\nTo: ${to || 'Manual Upload'}\n\n${body}`,
-          parsedType: null, // Will be processed later
-          parsedJson: undefined,
         }
       });
 
@@ -78,7 +76,6 @@ router.get('/emails',
             fromAddr: true,
             subject: true,
             receivedAt: true,
-            parsedType: true,
             createdAt: true
           }
         }),
@@ -123,8 +120,8 @@ router.get('/emails/:id',
           subject: email.subject,
           receivedAt: email.receivedAt,
           rawContent: email.raw,
-          parsedType: email.parsedType,
-          parsedData: email.parsedJson,
+          parsedType: 'RAW_EMAIL',
+          parsedData: null,
           createdAt: email.createdAt
         }
       });
@@ -160,8 +157,6 @@ router.post('/emails/bulk',
               subject: emailData.subject,
               receivedAt: emailData.receivedAt ? new Date(emailData.receivedAt) : new Date(),
               raw: `Subject: ${emailData.subject}\nFrom: ${emailData.from}\nTo: ${emailData.to || 'Bulk Upload'}\n\n${emailData.body}`,
-              parsedType: null,
-              parsedJson: undefined,
             }
           });
         })

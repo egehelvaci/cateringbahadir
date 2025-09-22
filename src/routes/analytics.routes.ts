@@ -17,46 +17,15 @@ router.get('/overview',
 
       const [
         totalEmails,
-        totalCargos,
-        totalVessels,
-        totalMatches,
         emailsLast30Days,
-        emailsLast7Days,
-        cargosLast30Days,
-        vesselsLast30Days,
-        matchesLast30Days,
-        recentMatches
+        emailsLast7Days
       ] = await Promise.all([
         prisma.inboundEmail.count(),
-        prisma.cargo.count(),
-        prisma.vessel.count(),
-        prisma.match.count(),
         prisma.inboundEmail.count({
           where: { createdAt: { gte: thirtyDaysAgo } }
         }),
         prisma.inboundEmail.count({
           where: { createdAt: { gte: sevenDaysAgo } }
-        }),
-        prisma.cargo.count({
-          where: { createdAt: { gte: thirtyDaysAgo } }
-        }),
-        prisma.vessel.count({
-          where: { createdAt: { gte: thirtyDaysAgo } }
-        }),
-        prisma.match.count({
-          where: { createdAt: { gte: thirtyDaysAgo } }
-        }),
-        prisma.match.findMany({
-          take: 10,
-          orderBy: { createdAt: 'desc' },
-          include: {
-            cargo: {
-              select: { commodity: true, loadPort: true, dischargePort: true }
-            },
-            vessel: {
-              select: { name: true, dwt: true, currentArea: true }
-            }
-          }
         })
       ]);
 
@@ -64,20 +33,14 @@ router.get('/overview',
         success: true,
         data: {
           totals: {
-            emails: totalEmails,
-            cargos: totalCargos,
-            vessels: totalVessels,
-            matches: totalMatches
+            emails: totalEmails
           },
           trends: {
             emailsLast30Days,
-            emailsLast7Days,
-            cargosLast30Days,
-            vesselsLast30Days,
-            matchesLast30Days
+            emailsLast7Days
           },
           recentActivity: {
-            matches: recentMatches
+            message: "AI processing disabled - only email statistics available"
           }
         },
         timestamp: new Date().toISOString()
@@ -99,13 +62,9 @@ router.get('/emails-by-day',
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
 
-      const emailStats = await prisma.inboundEmail.groupBy({
-        by: ['parsedType'],
+      const emailCount = await prisma.inboundEmail.count({
         where: {
           createdAt: { gte: startDate }
-        },
-        _count: {
-          id: true
         }
       });
 
@@ -113,10 +72,11 @@ router.get('/emails-by-day',
         success: true,
         data: {
           period: `${days} days`,
-          stats: emailStats.map(stat => ({
-            type: stat.parsedType || 'UNKNOWN',
-            count: stat._count.id
-          }))
+          stats: [{
+            type: 'RAW_EMAIL',
+            count: emailCount
+          }],
+          message: "AI processing disabled - only raw email statistics available"
         },
         timestamp: new Date().toISOString()
       });
@@ -127,32 +87,17 @@ router.get('/emails-by-day',
   }
 );
 
-// GET /analytics/top-commodities - En çok kargoların istatistikleri
+// GET /analytics/top-commodities - AI processing disabled
 router.get('/top-commodities',
   strictRateLimiter,
   authenticate,
   async (_req: Request, res: Response, next: NextFunction) => {
     try {
-      const topCommodities = await prisma.cargo.groupBy({
-        by: ['commodity'],
-        _count: {
-          commodity: true
-        },
-        orderBy: {
-          _count: {
-            commodity: 'desc'
-          }
-        },
-        take: 10
-      });
-
       res.json({
         success: true,
         data: {
-          topCommodities: topCommodities.map(item => ({
-            commodity: item.commodity,
-            count: item._count.commodity
-          }))
+          message: "AI processing disabled - commodity statistics not available",
+          topCommodities: []
         },
         timestamp: new Date().toISOString()
       });

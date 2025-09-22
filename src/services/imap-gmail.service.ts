@@ -3,7 +3,7 @@ const { simpleParser } = require('mailparser');
 import { logger } from '../utils/logger';
 import { prisma } from '../config/database';
 // AI services removed - no longer needed
-import { MailType } from '@prisma/client';
+// import { MailType } from '@prisma/client'; // AI processing disabled
 
 interface EmailMessage {
   id: string;
@@ -161,7 +161,7 @@ export class ImapGmailService {
     });
   }
 
-  private async processMessages(messages: EmailMessage[], filterCatering: boolean, saveToDb: boolean, resolve: any): Promise<void> {
+  private async processMessages(messages: EmailMessage[], _filterCatering: boolean, saveToDb: boolean, resolve: any): Promise<void> {
     let filteredMessages = messages;
     
     // No filtering - save all messages
@@ -199,42 +199,26 @@ export class ImapGmailService {
 
         if (!existing) {
           // Simplified mail processing - no AI classification
-          let emailType: MailType | null = null;
-          let parsedJson = null;
+          // AI processing disabled - save as raw email
           
           // Just save the raw email without AI processing
           logger.info(`Saving email "${message.subject}" without AI processing`);
 
-          const savedEmail = await prisma.inboundEmail.create({
+          await prisma.inboundEmail.create({
             data: {
               messageId: `gmail-${message.id}`,
               fromAddr: message.from,
               subject: message.subject,
               receivedAt: message.date,
               raw: message.body,
-              parsedType: emailType,
-              parsedJson: (parsedJson as any) || {
-                id: message.id,
-                to: message.to,
-                html: message.html,
-                attachments: message.attachments,
-                source: 'gmail-imap',
-                aiClassification: aiClassification ? {
-                  type: aiClassification.type,
-                  confidence: aiClassification.confidence,
-                  reason: aiClassification.reason,
-                  extractedData: aiClassification.extractedData || {}
-                } : null
-              } as any
+              gmailId: message.id,
+              threadId: null,
+              labelIds: [],
+              historyId: null
             }
           });
-
-          // Create corresponding Cargo or Vessel record based on AI classification
-          if (aiClassification && aiClassification.type !== 'UNKNOWN') {
-            await this.createCargoOrVesselRecord(savedEmail.id, aiClassification, message);
-          }
           
-          logger.info(`Saved email to database: ${message.subject} (Type: ${emailType})`);
+          logger.info(`Saved email to database: ${message.subject}`);
         } else {
           logger.debug(`Email already exists in database: ${message.subject}`);
         }
@@ -244,92 +228,7 @@ export class ImapGmailService {
     }
   }
 
-  private async createCargoOrVesselRecord(_emailId: number, classification: any, message: any): Promise<void> {
-    try {
-      if (classification.type === 'CARGO') {
-        await prisma.cargo.create({
-          data: {
-            commodity: classification.extractedData?.commodity || 'Unknown',
-            qtyValue: this.parseQuantity(classification.extractedData?.quantity),
-            qtyUnit: this.parseQuantityUnit(classification.extractedData?.quantity),
-            loadPort: classification.extractedData?.loadPort || null,
-            dischargePort: classification.extractedData?.dischargePort || null,
-            laycanStart: this.parseDate(classification.extractedData?.laycan, 'start'),
-            laycanEnd: this.parseDate(classification.extractedData?.laycan, 'end'),
-            notes: `Auto-extracted from email: ${message.subject}\nFrom: ${message.from}\nConfidence: ${classification.confidence}`
-          }
-        });
-        
-        logger.info(`Created Cargo record for email: ${message.subject}`);
-        
-      } else if (classification.type === 'VESSEL') {
-        await prisma.vessel.create({
-          data: {
-            name: classification.extractedData?.vesselName || 'Unknown Vessel',
-            imo: classification.extractedData?.imo || null,
-            dwt: this.parseNumber(classification.extractedData?.dwt),
-            capacityTon: this.parseNumber(classification.extractedData?.capacity),
-            currentArea: classification.extractedData?.currentLocation || null,
-            availableFrom: this.parseDate(classification.extractedData?.availability, 'start'),
-            notes: `Auto-extracted from email: ${message.subject}\nFrom: ${message.from}\nConfidence: ${classification.confidence}`
-          }
-        });
-        
-        logger.info(`Created Vessel record for email: ${message.subject}`);
-      }
-    } catch (error) {
-      logger.error('Error creating cargo/vessel record:', error);
-    }
-  }
-
-  private parseQuantity(quantityStr: string | undefined): number | null {
-    if (!quantityStr) return null;
-    const match = quantityStr.match(/(\d+(?:\.\d+)?)/);
-    return match ? parseFloat(match[1]) : null;
-  }
-
-  private parseQuantityUnit(quantityStr: string | undefined): string | null {
-    if (!quantityStr) return null;
-    const units = ['mt', 'tons', 'tonnes', 'kg', 'lbs'];
-    const unit = units.find(u => quantityStr.toLowerCase().includes(u));
-    return unit || 'mt';
-  }
-
-  private parseNumber(numberStr: string | undefined): number | null {
-    if (!numberStr) return null;
-    const match = numberStr.match(/(\d+(?:\.\d+)?)/);
-    return match ? parseFloat(match[1]) : null;
-  }
-
-  private parseDate(dateStr: string | undefined, type: 'start' | 'end'): Date | null {
-    if (!dateStr) return null;
-    
-    // Simple date parsing - can be enhanced
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    
-    // Look for patterns like "15-20 Sep", "Sept 15-20", etc.
-    const monthMatch = dateStr.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i);
-    const dayMatch = dateStr.match(/(\d{1,2})-(\d{1,2})/);
-    
-    if (monthMatch && dayMatch) {
-      const monthStr = monthMatch[1].toLowerCase();
-      const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-      const month = months.indexOf(monthStr);
-      
-      if (month !== -1) {
-        const startDay = parseInt(dayMatch[1]);
-        const endDay = parseInt(dayMatch[2]);
-        const day = type === 'start' ? startDay : endDay;
-        
-        return new Date(currentYear, month, day);
-      }
-    }
-    
-    return null;
-  }
-
-  // AI-specific table saving removed - no longer needed
+  // AI processing methods removed - no longer needed
 
   static async testConnection(email: string, appPassword: string): Promise<boolean> {
     try {

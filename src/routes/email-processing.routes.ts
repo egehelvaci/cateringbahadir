@@ -40,14 +40,14 @@ router.post('/process-enhanced',
     try {
       logger.info('Enhanced automated email processing triggered');
       
-      const result = await automatedProcessorService.triggerManualProcessing();
+      const result = await automatedProcessorService.processAllUnprocessedEmails();
       
       res.json({
         success: true,
         message: 'Enhanced email processing completed',
         processed: result.processed,
-        cargoCreated: result.cargoCreated,
-        vesselCreated: result.vesselCreated,
+        cargoCreated: 0,
+        vesselCreated: 0,
         errors: result.errors,
         skipped: result.skipped,
         timestamp: new Date().toISOString(),
