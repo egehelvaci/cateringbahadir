@@ -19,6 +19,7 @@ export interface ExportResult {
   fileName: string;
   totalEmails: number;
   fileSize: number;
+  downloadUrl: string;
 }
 
 export class MailExportService {
@@ -80,7 +81,8 @@ export class MailExportService {
       return {
         fileName,
         totalEmails: emails.length,
-        fileSize
+        fileSize,
+        downloadUrl: `/api/mail-export/download/${fileName}`
       };
 
     } catch (error) {

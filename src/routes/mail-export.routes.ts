@@ -63,6 +63,60 @@ router.post('/export-txt',
   }
 );
 
+// POST /mail-export/export-word - Mailleri Word formatında export et
+router.post('/export-word',
+  strictRateLimiter,
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const {
+        startDate,
+        endDate,
+        startTime,
+        endTime,
+        fromEmail,
+        subjectFilter,
+        includeRaw = false
+      } = req.body;
+
+      logger.info('Word export request received', {
+        startDate,
+        endDate,
+        startTime,
+        endTime,
+        fromEmail,
+        subjectFilter,
+        includeRaw
+      });
+
+      const result = await mailExportService.exportEmailsToTxt({
+        startDate,
+        endDate,
+        startTime,
+        endTime,
+        fromEmail,
+        subjectFilter,
+        includeRaw,
+        format: 'docx'
+      });
+
+      res.json({
+        success: true,
+        message: 'Word export completed successfully',
+        data: {
+          fileName: result.fileName,
+          totalEmails: result.totalEmails,
+          fileSize: result.fileSize,
+          downloadUrl: result.downloadUrl
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // Download exported file
 router.get('/download/:fileName',
   strictRateLimiter,
