@@ -50,49 +50,192 @@ const upload = multer({
   }
 });
 
-// Basit mail parser
+// Gelişmiş mail parser
 function parseMailContent(content) {
   const vessels = [];
   const cargos = [];
 
-  // Gemi pattern'leri
-  const vesselNameMatch = content.match(/M[\/.]?V\s+([A-Z\s\d]+)/i);
-  const dwtMatch = content.match(/(\d{1,3}[,.]?\d{3})\s*(?:MT|DWT)/i);
-  const openPortMatch = content.match(/OPEN[:\s]+([A-Z\s]+)/i);
-  const laycanMatch = content.match(/(\d{1,2}[-\/]\d{1,2})\s*[-\/]\s*(\d{1,2}[-\/]\d{1,2})/i);
-  const grainMatch = content.match(/GRAIN[:\s]+(\d{1,3}[,.]?\d{3})\s*CUFT/i);
-  const speedMatch = content.match(/(\d{1,2}(?:\.\d)?)\s*KNOTS/i);
+  // Mail'leri satırlara böl
+  const lines = content.split('\n');
+  
+  // Gemi parsing - çoklu pattern'ler
+  const vesselPatterns = [
+    // Gemi adları
+    { pattern: /(?:M[\/.]?V\s+|mv\s+|VESSEL\s+)?([A-Z\s\d]+)(?:\s*-|\s*DWT|\s*twn)/i, type: 'name' },
+    { pattern: /([A-Z]+)\s*(?:twn|bulk carrier|SID\/BOX)/i, type: 'name' },
+    
+    // DWT
+    { pattern: /(\d{1,3}[,.]?\d{3})\s*(?:MT\s+)?DWT/i, type: 'dwt' },
+    { pattern: /DWT[:\s]*(\d{1,3}[,.]?\d{3})/i, type: 'dwt' },
+    
+    // Limanlar
+    { pattern: /OPEN[:\s@]+([A-Z\s]+?)(?:\s*O\/A|\s*\d|\s*$)/i, type: 'port' },
+    { pattern: /open\s+@?\s*([A-Z\s]+?)(?:\s*\d|\s*$)/i, type: 'port' },
+    
+    // Laycan
+    { pattern: /(\d{1,2}[-\/]\d{1,2})\s*[-\/]\s*(\d{1,2}[-\/]\d{1,2})/i, type: 'laycan' },
+    { pattern: /(\d{1,2}[-\/]\d{1,2})\s*(?:OCT|NOV|SEP|DEC)/i, type: 'laycan_single' },
+    { pattern: /O\/A\s*(\d{1,2}(?:st|nd|rd|th)?\s*(?:OCT|NOV|SEP|DEC))/i, type: 'laycan_single' },
+    
+    // Kapasiteler
+    { pattern: /(\d{1,3}[,.]?\d{3})\s*(?:cbm|CBM|cuft|CUFT)/i, type: 'capacity' },
+    { pattern: /(\d{1,6})\s*cbft/i, type: 'capacity' },
+    
+    // Hız
+    { pattern: /(\d{1,2}(?:\.\d)?)\s*(?:knots|KNOTS|KTS)/i, type: 'speed' }
+  ];
 
-  if (vesselNameMatch) {
-    const vessel = {
-      name: vesselNameMatch[1].trim(),
-      dwt: dwtMatch ? parseFloat(dwtMatch[1].replace(/[,]/g, '')) : 0,
-      currentPort: openPortMatch ? openPortMatch[1].trim() : null,
-      laycanStart: laycanMatch ? laycanMatch[1] : null,
-      laycanEnd: laycanMatch ? laycanMatch[2] : null,
-      grainCuft: grainMatch ? parseFloat(grainMatch[1].replace(/[,]/g, '')) : null,
-      speedKnots: speedMatch ? parseFloat(speedMatch[1]) : 12,
-      features: content.toLowerCase().includes('geared') ? ['geared'] : []
-    };
-    vessels.push(vessel);
-  }
+  // Yük parsing pattern'leri
+  const cargoPatterns = [
+    // Yük miktarları
+    { pattern: /(\d{1,3}[,.]?\d{3})\s*(?:mt|mts|MT|MTS)\s*(?:\+?-?\d+%?)?\s*([a-z\s]+)/i, type: 'cargo' },
+    { pattern: /(\d{1,3}[,.]?\d{3})\s*(?:ts|TS)\s*(?:\d+%\s*)?([a-z\s]+)/i, type: 'cargo' },
+    
+    // Rotalar
+    { pattern: /([A-Z\s]+?)\s*[\/\\]\s*([A-Z\s]+?)(?:\s|$)/i, type: 'route' },
+    { pattern: /(?:EX|FROM)[:\s]+([A-Z\s]+)/i, type: 'load_port' },
+    
+    // SF
+    { pattern: /sf\s*(?:abt\s*)?(\d+(?:\.\d+)?)/i, type: 'sf' },
+    { pattern: /STW\s*(\d+)/i, type: 'sf' },
+    
+    // Laycan
+    { pattern: /(\d{1,2}[-\/]\d{1,2})\s*(?:[-\/]\s*(\d{1,2}[-\/]\d{1,2}))?/i, type: 'laycan' }
+  ];
 
-  // Yük pattern'leri
-  const cargoMatch = content.match(/(\d{1,3}[,.]?\d{3})\s*MT\s+([A-Z]+)/i);
-  const loadPortMatch = content.match(/(?:EX|FROM)[:\s]+([A-Z\s]+)/i);
-  const sfMatch = content.match(/SF[:\s]+(\d+)\s*CUFT\/MT/i);
+  // Her satırı analiz et
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line.length < 5) continue;
 
-  if (cargoMatch) {
-    const cargo = {
-      reference: `${cargoMatch[1]} MT ${cargoMatch[2]}`,
-      quantity: parseFloat(cargoMatch[1].replace(/[,]/g, '')),
-      loadPort: loadPortMatch ? loadPortMatch[1].trim() : null,
-      laycanStart: laycanMatch ? laycanMatch[1] : null,
-      laycanEnd: laycanMatch ? laycanMatch[2] : null,
-      stowageFactorValue: sfMatch ? parseFloat(sfMatch[1]) : null,
-      requirements: content.toLowerCase().includes('geared') ? ['geared'] : []
-    };
-    cargos.push(cargo);
+    let currentVessel = null;
+    let currentCargo = null;
+
+    // Gemi bilgilerini çıkar
+    for (const vp of vesselPatterns) {
+      const match = line.match(vp.pattern);
+      if (match) {
+        if (vp.type === 'name' && match[1]) {
+          const name = match[1].trim();
+          if (name.length > 2 && name.length < 30) {
+            currentVessel = currentVessel || { name: name, features: [] };
+            currentVessel.name = name;
+          }
+        }
+        else if (vp.type === 'dwt' && match[1]) {
+          const dwt = parseFloat(match[1].replace(/[,]/g, ''));
+          if (dwt > 100 && dwt < 500000) {
+            currentVessel = currentVessel || { features: [] };
+            currentVessel.dwt = dwt;
+          }
+        }
+        else if (vp.type === 'port' && match[1]) {
+          const port = match[1].trim();
+          if (port.length > 2 && port.length < 20) {
+            currentVessel = currentVessel || { features: [] };
+            currentVessel.currentPort = port;
+          }
+        }
+        else if (vp.type === 'capacity' && match[1]) {
+          const capacity = parseFloat(match[1].replace(/[,]/g, ''));
+          currentVessel = currentVessel || { features: [] };
+          currentVessel.grainCuft = capacity;
+        }
+        else if (vp.type === 'speed' && match[1]) {
+          const speed = parseFloat(match[1]);
+          currentVessel = currentVessel || { features: [] };
+          currentVessel.speedKnots = speed;
+        }
+      }
+    }
+
+    // Yük bilgilerini çıkar
+    for (const cp of cargoPatterns) {
+      const match = line.match(cp.pattern);
+      if (match) {
+        if (cp.type === 'cargo' && match[1] && match[2]) {
+          const quantity = parseFloat(match[1].replace(/[,]/g, ''));
+          const commodity = match[2].trim();
+          if (quantity > 100 && quantity < 500000 && commodity.length > 2) {
+            currentCargo = currentCargo || {};
+            currentCargo.quantity = quantity;
+            currentCargo.reference = `${quantity} MT ${commodity}`;
+          }
+        }
+        else if (cp.type === 'route' && match[1] && match[2]) {
+          const from = match[1].trim();
+          const to = match[2].trim();
+          if (from.length > 2 && to.length > 2) {
+            currentCargo = currentCargo || {};
+            currentCargo.loadPort = from;
+            currentCargo.dischargePort = to;
+          }
+        }
+        else if (cp.type === 'load_port' && match[1]) {
+          const port = match[1].trim();
+          if (port.length > 2 && port.length < 20) {
+            currentCargo = currentCargo || {};
+            currentCargo.loadPort = port;
+          }
+        }
+        else if (cp.type === 'sf' && match[1]) {
+          const sf = parseFloat(match[1]);
+          if (sf > 10 && sf < 200) {
+            currentCargo = currentCargo || {};
+            currentCargo.stowageFactorValue = sf;
+          }
+        }
+      }
+    }
+
+    // Özellikler
+    if (line.toLowerCase().includes('geared') || line.toLowerCase().includes('crane')) {
+      if (currentVessel) currentVessel.features.push('geared');
+      if (currentCargo) {
+        currentCargo.requirements = currentCargo.requirements || [];
+        if (!currentCargo.requirements.includes('geared')) {
+          currentCargo.requirements.push('geared');
+        }
+      }
+    }
+
+    if (line.toLowerCase().includes('open hatch')) {
+      if (currentVessel) currentVessel.features.push('open_hatch');
+    }
+
+    if (line.toLowerCase().includes('box')) {
+      if (currentVessel) currentVessel.features.push('box');
+    }
+
+    // Geçerli gemi/yük varsa ekle
+    if (currentVessel && currentVessel.name && currentVessel.dwt) {
+      // Daha önce aynı gemi eklendi mi kontrol et
+      const existing = vessels.find(v => v.name === currentVessel.name);
+      if (!existing) {
+        vessels.push({
+          name: currentVessel.name,
+          dwt: currentVessel.dwt || 0,
+          currentPort: currentVessel.currentPort || 'Unknown',
+          grainCuft: currentVessel.grainCuft || null,
+          speedKnots: currentVessel.speedKnots || 12,
+          features: currentVessel.features || []
+        });
+      }
+    }
+
+    if (currentCargo && currentCargo.quantity && currentCargo.reference) {
+      // Daha önce aynı yük eklendi mi kontrol et
+      const existing = cargos.find(c => c.reference === currentCargo.reference);
+      if (!existing) {
+        cargos.push({
+          reference: currentCargo.reference,
+          quantity: currentCargo.quantity,
+          loadPort: currentCargo.loadPort || 'Unknown',
+          stowageFactorValue: currentCargo.stowageFactorValue || null,
+          requirements: currentCargo.requirements || []
+        });
+      }
+    }
   }
 
   return { vessels, cargos };

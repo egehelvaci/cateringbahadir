@@ -1,0 +1,266 @@
+================================================================================
+MAIL EXPORT RAPORU - 26 MAIL
+================================================================================
+
+MAIL 1 - KPLines MPP positions
+----------------------------------------
+EENDRACHT   
+twn, 2x120/240mt, 2000sqm   
+ROTTERDAM   
+PROMPT
+3,500 DWT   
+IMO 1, open hatch, 16 knts   
+DIR MED   
+
+ATLANTIC   
+twn, 2x120/240mt, 2000sqm   
+HARNOSAND   
+16 OCT
+3,500 DWT   
+IMO 1, open hatch, 16 knts   
+ANY DIR WW   
+
+PANTHERA    
+twn, 2x150/300mt, 2900sqm   
+EEMSHAVEN   
+26 SEP
+7,000 DWT   
+IMO 1, 9600cbm, 13 knts   
+ANY DIR WW
+
+VEGA    
+twn, 2x60/120mt, 3200 sqm   
+FOYNES   
+27 SEP
+9,851 DWT   
+IMO 1, 12800cbm, Ice 1A   
+PC DIR E MED   
+
+ROYAL   
+twn, 2x250/500mt, 3000sqm   
+CONTINENT   
+27 SEP
+10,100 DWT   
+IMO 1, 13900cbm   
+ANY DIR WW
+
+RUBY   
+twn, 2x250/500mt, 3000sqm   
+ANTWERP   
+27 SEP
+10,100 DWT   
+IMO 1, 13900cbm   
+PC DIR WEST AFRICA
+
+GAJA   
+twn, 2x240/480mt, 5000 sqm   
+CONTINENT   
+06 OCT
+12,215 DWT   
+IMO 1, 18700 cbm, Lakes   
+PC ANY DIR   
+
+NORDIC   
+twn, gless, 2800sqm   
+PORT SAID   
+PROMPT
+3,400 DWT   
+IMO 1, open hatch, 90x15m   
+ANY DIR WW
+
+OCEANIC   
+twn, gless, 2800sqm   
+BLACK SEA   
+12 OCT
+3,400 DWT   
+IMO 1, open hatch, 90x15m   
+ANY DIR WW
+
+HARMONY   
+twn, 2x250/500mt, 5000sqm   
+MARMARA   
+04 OCT
+31,749 DWT   
+IMO 1, 39000cbm, 1864 teu   
+PC DIR WEST AFRICA   
+
+JANA-ROSA   
+bulk carrier, 3x30mt   
+PUERTO RICO   
+27 NOV
+22,100 DWT   
+29000cbm, 1000000 cbft   
+ANY DIR WW   
+
+MOEN   
+SID/BOX, 270000cbft bale   
+SHANGHAI   
+10 OCT
+5,200 DWT   
+ice class 1A   
+DIR WEST AFRICA   
+
+FYN   
+SID/BOX, 270000cbft bale   
+SHANGHAI   
+20 OCT
+5,200 DWT   
+ice class 1A   
+DIR MED   
+
+MAIL 2 - PAGER CO Cargo
+----------------------------------------
+Achladi / Israel
+upto 9.900 mts rsm stw abt 63' wog
+l/c 01 Oct / onw
+8.0 ttl days sshex
+1.25 pct ttl + 1.25% to Pager
+
+MAIL 3 - Niavigrains Sunflower Seeds
+----------------------------------------
+4000mts +-10% sunflower seeds sf abt 86-87  
+Constantza/1 Marmara or Samsun 
+24 -30 september
+2500 SSHINC / 1500 sshex 
+2,5% ttl here 
+
+MAIL 4 - Zygos Maritime MOKSHA
+----------------------------------------
+M/V MOKSHA
+DWT  56,880 MTS   (RIGHTSHIP 3 STAR)     
+OPEN WC INDIA,  BHAVNAGAR   O/A  26-30 SEP
+CAN CONSIDER ANY (EXCL IRAN) -    INDIAN COASTAL OK
+CAN DO 2 X 25 TS COILS - DECK CARGO OKAY
+Liberia Flag - CCS - Sd/Bc - 2011 Blt
+56,880.0 dwt on 12,80 m ssw (Tpc 58,80)
+5 ho/ha - 4x36 ton cranes +  4 X 12 cbm grabs
+Abt 11,70 knots on abt 24,0 mtns vlsifo + 0,2 mtns lmgo
+
+MAIL 5 - Zygos Maritime CHARBEL 1
+----------------------------------------
+mv CHARBEL 1 - 
+( 28,218 mt DWT , built 2011 ) - Japanese Built - open Aveiro, Portugal
+o/a  4th Oct agw wp uce
+BOD: abt 350 mts vlsfo / abt 100 mts lsmgo
+
+MAIL 6 - Niavigrains Wheat Yemen
+----------------------------------------
+8000-12000 mt wheat in bulk
+POC / 1 YEMEN PORT
+2500/1500
+25-30 sept (try vsl dates)
+1,25% past us
+Geared imperative at disch.
+
+MAIL 7 - AMT Steel Profiles
+----------------------------------------
+Seville / Diliskelesi - 1 gsb be
+4000 mt 2% molchopt steel profiles length 12,1 m
+01-02 October 2025 
+1500 / 1500 - sshex be
+2,5% pus
+
+MAIL 8 - Bridge S&P OCEAN GLORY
+----------------------------------------
+M/V OCEAN GLORY
+Vessel Type Bulk Carrier / Logger
+IMO 9278648
+DWT 35552
+Built Year / Place 2003 / Shin Kurushima Onishi - Japan
+Grain / Bale 45428 CBM / 43592 CBM
+Geared Crane 4x30.5T
+Speed 14.6 Knots
+She is presently Douala, West Africa for discharging.
+
+MAIL 9 - Mancino Brokers Triticale
+----------------------------------------
+Stettin-Gdynia-Gdansk / 1 Huelva-Cartagena-Valencia
+7.000/10% Triticale  STW 46
+3.500 sshex bends 
+01 OCT onw
+2.50% PUS
+
+MAIL 10 - KPLines Steel Coils
+----------------------------------------
+Iskenderun – Antwerp
+Abt 6000 mt steel coils uw 10-25 mt
+Spot ppt
+1800 shinc – 3000 x
+5 pct ttl
+
+MAIL 11 - GMC Lines Tonnage
+----------------------------------------
+m/v LUTUF - 2.650 DWT - Open @ Libya 27-30 September
+m/v MUNIS - 3.000 DWT - Open @ Marmara 23-24 September
+
+MAIL 12 - PAGER CO Alfalfa Pellets
+----------------------------------------
+Tarragona \ 1-2 sp Greece
+5.000 – 6.300 oo blk alfalfa pellets sf abt 58
+ppt dates
+7 ttl days
+5 ttl + 1.25% to Pager
+
+MAIL 13 - Niavigrains Wheat Chorno
+----------------------------------------
+8000 mts 10% wheat bulk
+Chorno or Odessa / Marmara
+3000/1750
+28 sept / 2 oct
+2,5% ttl
+
+MAIL 14 - Niavigrains Wheat Tunisia
+----------------------------------------
+FOS SUL MER / 1 TUNISIA
+5000 mts +-10% mts  Wheat sf 46
+2500/ 1500
+25 -30 September
+2.5% ttl here
+
+MAIL 15 - LEMA Chartering Multiple Cargos
+----------------------------------------
+6,000 ts 10% bulk rapeseed meal max 65'
+Reni, (7 m) / 1 Italy
+spot/onw
+1200/1200 x be
+3.75 pct ttl here 
+
+6,000 ts 10% bulk wheat, abt 46'
+Reni (7 m ) / 1 Italy
+spot/onwards
+1500sx be
+3.75 pct ttl here 
+
+M/M 6.000/6.600 ts blk Rapeseeds meal, sf abt 65'
+Reni (7m) / Ravenna or 1sp Spanmed
+ppt/onw
+1500/1500
+3.75 pct ttl here 
+
+RENI/TARTOUS
+6300 mt corn in bulk sf abt 50'
+1500/1500
+Spot-onw
+2.50 pct ttl here
+
+RENI/TARTOUS
+10.000 mt corn in bulk sf abt 50'
+1500/1500
+Spot-onw
+2.50 pct ttl here 
+
+MAIL 16 - Seaside Chartering Wheat
+----------------------------------------
+ABT 20.000 MTS OF WHEAT IN BULK SF ABT 46 WOG  
+1 GSB SILLAMAE, ESTONIA/ 1 GSB BARI (OR NAPLES GULF OR SICILY OR SALERNO OR RAVENA, ITALY) 
+LAY CAN 10-20 NOVEMBER 2025
+L/D 7000 MTS PER WWD SSHINC/4000 MTS PER WWD SSHEX EIU (FRI 17 - MON O8)
+2.5 ADD COM PUS
+
+MAIL 17 - AMT Steel Coils
+----------------------------------------
+3000 mt 5% molchopt galvanized coils + hrc + non prime coils, uw max 28 mt wog
+Aviles /  Burgas (1000) + Constanta (2000)
+25-29 September 2025
+2500 sx / 24h sx + 24h sx
+2,5% adc pus

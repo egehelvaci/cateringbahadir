@@ -7,12 +7,12 @@ async function testAutoMatchAPI() {
     console.log('🚀 Gemi-Yük Otomatik Eşleştirme API Testi\n');
 
     // Test dosyasını oku
-    const fileBuffer = fs.readFileSync('test-mail.txt');
+    const fileBuffer = fs.readFileSync('real-mail-export.txt');
     
     // FormData oluştur
     const form = new FormData();
     form.append('file', fileBuffer, {
-      filename: 'test-mail.txt',
+      filename: 'real-mail-export.txt',
       contentType: 'text/plain'
     });
     form.append('minMatchScore', '60');
