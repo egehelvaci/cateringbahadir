@@ -8,7 +8,7 @@ datasource db {
 }
 
 model Company {
-  id      BigInt @id @default(autoincrement())
+  id      Int @id @default(autoincrement())
   name    String
   users   User[]
   
@@ -17,8 +17,8 @@ model Company {
 }
 
 model User {
-  id         BigInt  @id @default(autoincrement())
-  companyId  BigInt
+  id         Int  @id @default(autoincrement())
+  companyId  Int
   email      String  @unique
   name       String?
   password   String
@@ -35,7 +35,7 @@ model GoogleAccount {
   refreshToken    String
   scope           String?
   tokenType       String?  @default("Bearer")
-  expiryDate      BigInt?  // ms epoch
+  expiryDate      Int?     // ms epoch
   historyId       String?  // incremental sync için
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -56,7 +56,7 @@ model InboundEmail {
 }
 
 model MicrosoftAccount {
-  id           BigInt   @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   email        String   @unique
   accessToken  String
   refreshToken String?
@@ -145,4 +145,114 @@ enum OrderStatus {
   READY         // Hazır (tüm QR'lar ilk kez okutuldu)
   DELIVERED     // Teslim edildi (tüm QR'lar ikinci kez okutuldu)
   CANCELLED     // İptal edildi
+}
+
+// Gemi-Yük Eşleştirme Modelleri
+model Vessel {
+  id            Int         @id @default(autoincrement())
+  name          String
+  dwt           Float       // metric tons
+  grainCuft     Float?      // cubic feet
+  baleCuft      Float?      // cubic feet
+  speedKnots    Float       @default(12.0)
+  features      Json?       // ["box", "open_hatch", "geared", etc.]
+  currentPort   String?
+  laycanStart   DateTime?
+  laycanEnd     DateTime?
+  status        VesselStatus @default(AVAILABLE)
+  sourceEmailId Int?        // Hangi emailden parse edildi
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  matches       VesselCargoMatch[]
+  
+  @@index([status])
+  @@index([laycanStart, laycanEnd])
+  @@index([currentPort])
+}
+
+model Cargo {
+  id                  Int         @id @default(autoincrement())
+  reference           String      // Yük referansı/açıklaması
+  loadPort            String
+  laycanStart         DateTime
+  laycanEnd           DateTime
+  quantity            Float       // metric tons
+  stowageFactorValue  Float?
+  stowageFactorUnit   String      @default("cuft/mt") // "cuft/mt" veya "m3/mt"
+  brokenStowagePct    Float       @default(5.0)
+  requirements        Json?       // ["box", "open_hatch", etc.]
+  status              CargoStatus @default(AVAILABLE)
+  sourceEmailId       Int?        // Hangi emailden parse edildi
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  
+  matches             VesselCargoMatch[]
+  
+  @@index([status])
+  @@index([laycanStart, laycanEnd])
+  @@index([loadPort])
+}
+
+model VesselCargoMatch {
+  id              Int             @id @default(autoincrement())
+  vesselId        Int
+  cargoId         Int
+  matchScore      Float           // Eşleşme skoru (0-100)
+  matchReasons    Json            // Detaylı eşleşme bilgileri
+  status          MatchStatus     @default(PROPOSED)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  vessel          Vessel          @relation(fields: [vesselId], references: [id], onDelete: Cascade)
+  cargo           Cargo           @relation(fields: [cargoId], references: [id], onDelete: Cascade)
+  
+  @@unique([vesselId, cargoId])
+  @@index([status])
+  @@index([matchScore])
+}
+
+model Port {
+  id          BigInt    @id @default(autoincrement())
+  name        String    @unique
+  alternateNames Json?  // ["Chornomorsk", "Illichivsk", etc.]
+  country     String
+  latitude    Float
+  longitude   Float
+  type        String?   // "seaport", "river", etc.
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([name])
+  @@index([country])
+}
+
+enum VesselStatus {
+  AVAILABLE
+  FIXED      // Sabitlendi
+  INACTIVE
+  BALLAST    // Mevcut değer - korunuyor
+  LOADING    // Mevcut değer - korunuyor
+  DISCHARGING // Mevcut değer - korunuyor
+  MAINTENANCE // Mevcut değer - korunuyor
+}
+
+enum CargoStatus {
+  AVAILABLE
+  FIXED      // Sabitlendi
+  CANCELLED
+  OPEN       // Mevcut değer - korunuyor
+  FAILED     // Mevcut değer - korunuyor
+  ON_SUBJECTS // Mevcut değer - korunuyor
+}
+
+enum MatchStatus {
+  PROPOSED   // Önerilen
+  ACCEPTED   // Kabul edildi
+  REJECTED   // Reddedildi
+  EXPIRED    // Süresi doldu
+  SUGGESTED  // Mevcut değer - korunuyor
+  REVIEWED   // Mevcut değer - korunuyor
+  CONTACTED  // Mevcut değer - korunuyor
+  NEGOTIATING // Mevcut değer - korunuyor
 }
