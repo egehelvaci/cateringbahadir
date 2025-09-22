@@ -2,6 +2,7 @@ import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 
 export interface ExportOptions {
   startDate?: string; // YYYY-MM-DD format
@@ -11,6 +12,7 @@ export interface ExportOptions {
   fromEmail?: string;
   subjectFilter?: string;
   includeRaw?: boolean;
+  format?: 'txt' | 'docx'; // Export format
 }
 
 export interface ExportResult {
@@ -36,7 +38,7 @@ export class MailExportService {
   }
 
   /**
-   * Mailleri TXT formatında export et
+   * Mailleri TXT veya DOCX formatında export et
    */
   async exportEmailsToTxt(options: ExportOptions): Promise<ExportResult> {
     try {
@@ -57,14 +59,18 @@ export class MailExportService {
 
       // Dosya adı oluştur
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const fileName = `mail-export-${timestamp}.txt`;
+      const format = options.format || 'txt';
+      const extension = format === 'docx' ? 'docx' : 'txt';
+      const fileName = `mail-export-${timestamp}.${extension}`;
       const filePath = path.join(this.exportDir, fileName);
 
-      // TXT içeriğini oluştur
-      const txtContent = this.generateTxtContent(emails, options);
-
-      // Dosyayı yaz
-      fs.writeFileSync(filePath, txtContent, 'utf8');
+      // Format'a göre export et
+      if (format === 'docx') {
+        await this.exportToWord(emails, options, filePath);
+      } else {
+        const txtContent = this.generateTxtContent(emails, options);
+        fs.writeFileSync(filePath, txtContent, 'utf8');
+      }
 
       const stats = fs.statSync(filePath);
       const fileSize = stats.size;
@@ -271,6 +277,184 @@ export class MailExportService {
       logger.error('Error listing exported files:', error);
       throw error;
     }
+  }
+
+  /**
+   * Mailleri Word dosyası olarak export et
+   */
+  private async exportToWord(emails: any[], options: ExportOptions, filePath: string): Promise<void> {
+    try {
+      const paragraphs: Paragraph[] = [];
+
+      // Başlık
+      paragraphs.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: "📧 Mail Export Raporu",
+              bold: true,
+              size: 32
+            })
+          ],
+          heading: HeadingLevel.TITLE,
+          alignment: AlignmentType.CENTER
+        })
+      );
+
+      // Boş satır
+      paragraphs.push(new Paragraph({ children: [new TextRun({ text: "" })] }));
+
+      // Özet bilgileri
+      const summary = this.generateSummary(emails, options);
+      paragraphs.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: "📊 Özet Bilgiler",
+              bold: true,
+              size: 24
+            })
+          ],
+          heading: HeadingLevel.HEADING_1
+        })
+      );
+
+      summary.split('\n').forEach((line: string) => {
+        if (line.trim()) {
+          paragraphs.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: line,
+                  size: 20
+                })
+              ]
+            })
+          );
+        }
+      });
+
+      // Boş satır
+      paragraphs.push(new Paragraph({ children: [new TextRun({ text: "" })] }));
+
+      // Mail detayları
+      paragraphs.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: "📬 Mail Detayları",
+              bold: true,
+              size: 24
+            })
+          ],
+          heading: HeadingLevel.HEADING_1
+        })
+      );
+
+      emails.forEach((email, index) => {
+        // Mail başlığı
+        paragraphs.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Mail ${index + 1}`,
+                bold: true,
+                size: 20
+              })
+            ],
+            heading: HeadingLevel.HEADING_2
+          })
+        );
+
+        // Mail bilgileri
+        const emailInfo = this.formatEmailInfo(email, options);
+        emailInfo.split('\n').forEach(line => {
+          if (line.trim()) {
+            paragraphs.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: line,
+                    size: 18
+                  })
+                ]
+              })
+            );
+          }
+        });
+
+        // Boş satır
+        paragraphs.push(new Paragraph({ children: [new TextRun({ text: "" })] }));
+      });
+
+      // Word belgesi oluştur
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: paragraphs
+        }]
+      });
+
+      // Dosyayı kaydet
+      const buffer = await Packer.toBuffer(doc);
+      fs.writeFileSync(filePath, buffer);
+
+      logger.info(`Word export completed: ${filePath}`);
+
+    } catch (error) {
+      logger.error('Error creating Word document:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Özet bilgileri oluştur
+   */
+  private generateSummary(emails: any[], options: ExportOptions): string {
+    let summary = '';
+    
+    summary += `📊 Toplam Mail Sayısı: ${emails.length}\n`;
+    summary += `📅 Export Tarihi: ${new Date().toLocaleString('tr-TR')}\n`;
+    summary += `📋 Format: ${options.format === 'docx' ? 'Word (DOCX)' : 'Metin (TXT)'}\n`;
+    
+    if (options.startDate || options.endDate) {
+      summary += `📅 Tarih Aralığı: `;
+      if (options.startDate) summary += `${options.startDate}`;
+      if (options.startDate && options.endDate) summary += ` - `;
+      if (options.endDate) summary += `${options.endDate}`;
+      summary += `\n`;
+    }
+    
+    if (options.fromEmail) {
+      summary += `👤 Gönderen Filtresi: ${options.fromEmail}\n`;
+    }
+    
+    if (options.subjectFilter) {
+      summary += `🔍 Konu Filtresi: ${options.subjectFilter}\n`;
+    }
+    
+    summary += `\n📝 Durum: Tüm mailler ham olarak kaydedildi (AI işleme yok)\n`;
+    
+    return summary;
+  }
+
+  /**
+   * Mail bilgilerini formatla
+   */
+  private formatEmailInfo(email: any, options: ExportOptions): string {
+    let info = '';
+    
+    info += `📧 Konu: ${email.subject || 'Konu yok'}\n`;
+    info += `👤 Gönderen: ${email.fromAddr || 'Bilinmiyor'}\n`;
+    info += `📅 Tarih: ${email.receivedAt ? new Date(email.receivedAt).toLocaleString('tr-TR') : 'Bilinmiyor'}\n`;
+    info += `🆔 ID: ${email.id}\n`;
+    
+    if (options.includeRaw && email.raw) {
+      info += `\n📄 İçerik:\n`;
+      info += `${email.raw.substring(0, 1000)}${email.raw.length > 1000 ? '...' : ''}\n`;
+    }
+    
+    return info;
   }
 
   /**

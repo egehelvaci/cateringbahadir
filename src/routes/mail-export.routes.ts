@@ -20,7 +20,8 @@ router.post('/export-txt',
         endTime,
         fromEmail,
         subjectFilter,
-        includeRaw = false
+        includeRaw = false,
+        format = 'txt'
       } = req.body;
 
       logger.info('Mail export request received', {
@@ -30,7 +31,8 @@ router.post('/export-txt',
         endTime,
         fromEmail,
         subjectFilter,
-        includeRaw
+        includeRaw,
+        format
       });
 
       const result = await mailExportService.exportEmailsToTxt({
@@ -40,7 +42,8 @@ router.post('/export-txt',
         endTime,
         fromEmail,
         subjectFilter,
-        includeRaw
+        includeRaw,
+        format
       });
 
       res.json({
@@ -70,6 +73,15 @@ router.get('/download/:fileName',
       
       const filePath = await mailExportService.getExportedFilePath(fileName);
       
+      // Dosya uzantısına göre content-type belirle
+      const extension = fileName.split('.').pop()?.toLowerCase();
+      let contentType = 'text/plain';
+      
+      if (extension === 'docx') {
+        contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      }
+      
+      res.setHeader('Content-Type', contentType);
       res.download(filePath, fileName, (err) => {
         if (err) {
           logger.error('Error downloading file:', err);

@@ -75,7 +75,7 @@ Kullanıcı girişi yapar.
 ### 📧 **Mail Export APIs** ⭐ *YENİ*
 
 #### **POST** `/api/mail-export/export-txt`
-Mailleri TXT formatında export eder.
+Mailleri TXT veya DOCX formatında export eder.
 
 **Request Body:**
 ```json
@@ -86,7 +86,8 @@ Mailleri TXT formatında export eder.
   "endTime": "17:00",               // HH:MM format
   "fromEmail": "sender@example.com", // Gönderen email filtresi
   "subjectFilter": "cargo",         // Konu filtresi
-  "includeRaw": true                // Ham içeriği dahil et
+  "includeRaw": true,               // Ham içeriği dahil et
+  "format": "docx"                  // Export format: "txt" veya "docx"
 }
 ```
 
@@ -96,19 +97,19 @@ Mailleri TXT formatında export eder.
   "success": true,
   "message": "Mail export completed successfully",
   "data": {
-    "fileName": "mail-export-2024-01-15T10-30-45-123Z.txt",
+    "fileName": "mail-export-2024-01-15T10-30-45-123Z.docx",
     "totalEmails": 150,
     "fileSize": 245760,
-    "downloadUrl": "/api/mail-export/download/mail-export-2024-01-15T10-30-45-123Z.txt"
+    "downloadUrl": "/api/mail-export/download/mail-export-2024-01-15T10-30-45-123Z.docx"
   },
   "timestamp": "2024-01-15T10:30:45.123Z"
 }
 ```
 
 #### **GET** `/api/mail-export/download/:fileName`
-Export edilmiş TXT dosyasını indirir.
+Export edilmiş TXT veya DOCX dosyasını indirir.
 
-**Response:** TXT dosyası binary olarak döner.
+**Response:** TXT veya DOCX dosyası binary olarak döner.
 
 #### **GET** `/api/mail-export/stats`
 Export istatistiklerini getirir.
@@ -633,8 +634,8 @@ Bildirimi okundu olarak işaretler.
 
 ### Mail Export
 ```javascript
-// Mail export
-const exportMails = async () => {
+// TXT export
+const exportMailsTxt = async () => {
   const response = await fetch('/api/mail-export/export-txt', {
     method: 'POST',
     headers: {
@@ -644,7 +645,27 @@ const exportMails = async () => {
     body: JSON.stringify({
       startDate: '2024-01-01',
       endDate: '2024-12-31',
-      includeRaw: true
+      includeRaw: true,
+      format: 'txt'
+    })
+  });
+  
+  return await response.json();
+};
+
+// Word export
+const exportMailsWord = async () => {
+  const response = await fetch('/api/mail-export/export-txt', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      startDate: '2024-01-01',
+      endDate: '2024-12-31',
+      includeRaw: true,
+      format: 'docx'
     })
   });
   
