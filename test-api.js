@@ -7,12 +7,12 @@ async function testAutoMatchAPI() {
     console.log('🚀 Gemi-Yük Otomatik Eşleştirme API Testi\n');
 
     // Test dosyasını oku
-    const fileBuffer = fs.readFileSync('real-mail-export.txt');
+    const fileBuffer = fs.readFileSync('C:/Users/ege_h/Downloads/mail-export-2025-09-22T18-56-17-672Z.txt');
     
     // FormData oluştur
     const form = new FormData();
     form.append('file', fileBuffer, {
-      filename: 'real-mail-export.txt',
+      filename: 'mail-export-2025-09-22T18-56-17-672Z.txt',
       contentType: 'text/plain'
     });
     // Optimal parametreler
@@ -25,7 +25,7 @@ async function testAutoMatchAPI() {
     console.log('📤 API çağrısı yapılıyor...');
 
     // API çağrısı
-    const response = await fetch('http://localhost:3001/api/auto-match', {
+    const response = await fetch('http://localhost:3000/api/auto-match', {
       method: 'POST',
       body: form,
       headers: form.getHeaders()
@@ -42,20 +42,20 @@ async function testAutoMatchAPI() {
       console.log(`   • Bulunan Yükler: ${result.data.summary.cargosFound}`);
       console.log(`   • Toplam Eşleşme: ${result.data.summary.totalMatches}\n`);
 
-      if (result.data.vessels.length > 0) {
-        console.log('🚢 Bulunan Gemiler:');
-        result.data.vessels.forEach(vessel => {
+      if (result.data.vessels && result.data.vessels.length > 0) {
+        console.log('🚢 İlk 5 Gemi:');
+        result.data.vessels.slice(0, 5).forEach(vessel => {
           console.log(`   • ${vessel.name} - ${vessel.dwt} DWT - ${vessel.currentPort}`);
         });
-        console.log('');
+        console.log(`   ... ve ${result.data.vessels.length - 5} gemi daha\n`);
       }
 
-      if (result.data.cargos.length > 0) {
-        console.log('📦 Bulunan Yükler:');
-        result.data.cargos.forEach(cargo => {
+      if (result.data.cargos && result.data.cargos.length > 0) {
+        console.log('📦 İlk 5 Yük:');
+        result.data.cargos.slice(0, 5).forEach(cargo => {
           console.log(`   • ${cargo.reference} - ${cargo.quantity} MT - ${cargo.loadPort}`);
         });
-        console.log('');
+        console.log(`   ... ve ${result.data.cargos.length - 5} yük daha\n`);
       }
 
       if (result.data.matches.length > 0) {
@@ -97,7 +97,7 @@ async function testAutoMatchAPI() {
     
     // Server çalışıyor mu kontrol et
     try {
-      const healthResponse = await fetch('http://localhost:3001/health');
+      const healthResponse = await fetch('http://localhost:3000/health');
       if (healthResponse.ok) {
         console.log('✅ Server çalışıyor');
       } else {

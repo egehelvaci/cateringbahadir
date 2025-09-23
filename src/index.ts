@@ -125,25 +125,92 @@ app.post('/api/auto-match', upload.single('file'), async (req, res) => {
     const vessels: any[] = [];
     const cargos: any[] = [];
     
-    // Gemi pattern'leri
-    const vesselMatches = content.match(/(\w+)\s+twn.*?(\d{1,3}[,.]?\d{3})\s*DWT/gi);
-    if (vesselMatches) {
-      vesselMatches.forEach((match, index) => {
-        const nameMatch = match.match(/(\w+)/);
-        const dwtMatch = match.match(/(\d{1,3}[,.]?\d{3})\s*DWT/);
-        if (nameMatch && dwtMatch) {
-          vessels.push({
-            name: nameMatch[1],
-            dwt: parseFloat(dwtMatch[1].replace(/[,]/g, '')),
-            currentPort: 'Various',
-            sourceMail: {
-              subject: `Vessel Position List`,
-              sender: 'Shipowner',
-              mailNumber: index + 1
+    // Gemi pattern'leri - gerçek veriye göre iyileştirildi
+    const lines = content.split('\n');
+    let currentMail = { subject: '', sender: '', mailIndex: 0 };
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      // Mail bilgilerini yakala
+      if (line.includes('MAIL ')) {
+        const mailMatch = line.match(/MAIL (\d+)/);
+        if (mailMatch) currentMail.mailIndex = parseInt(mailMatch[1]);
+      }
+      if (line.includes('Konu:')) {
+        currentMail.subject = line.replace('Konu:', '').trim();
+      }
+      if (line.includes('Gönderen:')) {
+        currentMail.sender = line.replace('Gönderen:', '').replace(/[<>"]/g, '').trim();
+      }
+      
+      // Gemi ismi ve DWT pattern'i
+      if (line.match(/^[A-Z][A-Z\s-]+$/i) && line.length > 3 && line.length < 25) {
+        const vesselName = line.trim();
+        // Sonraki satırlarda DWT ara
+        for (let j = i + 1; j < Math.min(i + 8, lines.length); j++) {
+          const nextLine = lines[j];
+          const dwtMatch = nextLine.match(/(\d{1,3}[,.]?\d{3})\s*DWT/i);
+          if (dwtMatch) {
+            const dwt = parseFloat(dwtMatch[1].replace(/[,]/g, ''));
+            if (dwt > 1000 && dwt < 200000) {
+              // Port bilgisini ara
+              let port = 'Various';
+              for (let k = Math.max(0, i - 3); k < Math.min(i + 5, lines.length); k++) {
+                const portLine = lines[k].trim();
+                if (portLine && portLine.length > 3 && portLine.length < 20 && 
+                    portLine.match(/^[A-Z\s]+$/) && 
+                    !portLine.includes('DWT') && 
+                    !portLine.includes('IMO') &&
+                    !portLine.includes('twn') &&
+                    portLine !== vesselName) {
+                  port = portLine;
+                  break;
+                }
+              }
+              
+              vessels.push({
+                name: vesselName,
+                dwt: dwt,
+                currentPort: port,
+                sourceMail: {
+                  subject: currentMail.subject || `Mail ${currentMail.mailIndex}`,
+                  sender: currentMail.sender || 'Unknown',
+                  mailNumber: currentMail.mailIndex
+                }
+              });
             }
-          });
+            break;
+          }
         }
-      });
+      }
+      
+      // M/V pattern'i
+      const mvMatch = line.match(/M\/V\s+([A-Z\s\d]+)/i);
+      if (mvMatch) {
+        const vesselName = mvMatch[1].trim();
+        // Sonraki satırlarda DWT ara
+        for (let j = i + 1; j < Math.min(i + 15, lines.length); j++) {
+          const nextLine = lines[j];
+          const dwtMatch = nextLine.match(/DWT\s*(\d{1,3}[,.]?\d{3})/i);
+          if (dwtMatch) {
+            const dwt = parseFloat(dwtMatch[1].replace(/[,]/g, ''));
+            if (dwt > 1000 && dwt < 200000) {
+              vessels.push({
+                name: vesselName,
+                dwt: dwt,
+                currentPort: 'Various',
+                sourceMail: {
+                  subject: currentMail.subject || `Mail ${currentMail.mailIndex}`,
+                  sender: currentMail.sender || 'Unknown',
+                  mailNumber: currentMail.mailIndex
+                }
+              });
+            }
+            break;
+          }
+        }
+      }
     }
 
     // Yük pattern'leri  

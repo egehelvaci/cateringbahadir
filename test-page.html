@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚢 Gemi-Yük Eşleştirme Testi</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }
+        .upload-area {
+            border: 2px dashed #007bff;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            margin: 20px 0;
+            cursor: pointer;
+        }
+        .upload-area:hover {
+            background-color: #f8f9fa;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .result {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .success {
+            background: #d1f2eb;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚢 Gemi-Yük Otomatik Eşleştirme Testi</h1>
+        
+        <div>
+            <label>
+                <input type="radio" name="server" value="localhost" checked> 
+                Localhost (http://localhost:3000)
+            </label>
+            <br>
+            <label>
+                <input type="radio" name="server" value="railway"> 
+                Railway (https://expressjs-postgres-production-05d5.up.railway.app)
+            </label>
+        </div>
+        
+        <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+            <input type="file" id="fileInput" accept=".txt,.docx,.doc" style="display: none;">
+            <div id="uploadText">
+                📁 Mail export dosyası seçin<br>
+                <small>TXT, DOC, DOCX (Max: 50MB)</small>
+            </div>
+        </div>
+        
+        <button id="testButton" class="btn" disabled>🎯 Test Et</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadText = document.getElementById('uploadText');
+        const testButton = document.getElementById('testButton');
+        const resultsDiv = document.getElementById('results');
+        
+        let selectedFile = null;
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                selectedFile = file;
+                uploadText.innerHTML = `✅ ${file.name}<br><small>${(file.size / 1024 / 1024).toFixed(2)} MB</small>`;
+                testButton.disabled = false;
+            }
+        });
+
+        testButton.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            const serverType = document.querySelector('input[name="server"]:checked').value;
+            const baseURL = serverType === 'localhost' 
+                ? 'http://localhost:3000' 
+                : 'https://expressjs-postgres-production-05d5.up.railway.app';
+
+            testButton.disabled = true;
+            testButton.innerHTML = '⏳ Test ediliyor...';
+            resultsDiv.innerHTML = '';
+
+            try {
+                // Önce test endpoint'ini kontrol et
+                console.log(`🧪 ${baseURL}/api/auto-match/test kontrol ediliyor...`);
+                
+                const testResponse = await fetch(`${baseURL}/api/auto-match/test`);
+                
+                if (!testResponse.ok) {
+                    throw new Error(`Test endpoint erişilemez: ${testResponse.status}`);
+                }
+                
+                const testResult = await testResponse.json();
+                console.log('✅ Test endpoint OK:', testResult);
+
+                // Dosya yükle
+                console.log(`📤 ${baseURL}/api/auto-match dosya yükleniyor...`);
+                
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('minMatchScore', '65');
+
+                const response = await fetch(`${baseURL}/api/auto-match`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    resultsDiv.innerHTML = `
+                        <div class="success">
+                            <h3>✅ Test Başarılı!</h3>
+                            <p><strong>Dosya:</strong> ${result.data.summary.fileName}</p>
+                            <p><strong>İşlem Süresi:</strong> ${result.data.summary.processingTime}</p>
+                            <p><strong>Gemiler:</strong> ${result.data.summary.vesselsFound}</p>
+                            <p><strong>Yükler:</strong> ${result.data.summary.cargosFound}</p>
+                            <p><strong>Eşleştirmeler:</strong> ${result.data.summary.totalMatches}</p>
+                        </div>
+                        
+                        ${result.data.matches.length > 0 ? `
+                            <div class="result">
+                                <h4>🎯 En İyi Eşleştirmeler:</h4>
+                                ${result.data.matches.slice(0, 3).map(match => `
+                                    <div style="margin: 10px 0; padding: 10px; border-left: 4px solid #28a745;">
+                                        <strong>${match.vessel.name} ↔ ${match.cargo.reference}</strong><br>
+                                        Skor: ${match.matchScore}/100 (${match.recommendation})<br>
+                                        <small>${match.reason || 'Detay yok'}</small>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : '<div class="result">❌ Hiç eşleştirme bulunamadı</div>'}
+                    `;
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="error">
+                            <h3>❌ API Hatası</h3>
+                            <p>${result.message}</p>
+                            ${result.error ? `<small>Detay: ${result.error}</small>` : ''}
+                        </div>
+                    `;
+                }
+
+            } catch (error) {
+                console.error('Hata:', error);
+                resultsDiv.innerHTML = `
+                    <div class="error">
+                        <h3>💥 Bağlantı Hatası</h3>
+                        <p>${error.message}</p>
+                        <p><strong>Server:</strong> ${baseURL}</p>
+                        <p><strong>Öneri:</strong> ${serverType === 'localhost' ? 'Local server çalışıyor mu kontrol edin' : 'Railway deployment tamamlanmayı bekleyin'}</p>
+                    </div>
+                `;
+            } finally {
+                testButton.disabled = false;
+                testButton.innerHTML = '🎯 Test Et';
+            }
+        });
+    </script>
+</body>
+</html>
