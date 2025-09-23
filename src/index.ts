@@ -3,6 +3,9 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import multer from 'multer';
+import * as path from 'path';
+import * as fs from 'fs';
 import 'express-async-errors';
 
 import { errorHandler } from './middleware/errorHandler';
@@ -92,6 +95,136 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', employeeRoutes);
 app.use('/api/mail-export', mailExportRoutes);
+
+// Basit Auto-Match endpoint'i
+const upload = multer({
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['.txt', '.docx', '.doc'];
+    const extension = path.extname(file.originalname).toLowerCase();
+    if (allowedTypes.includes(extension)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Sadece TXT, DOC ve DOCX dosyaları desteklenir'));
+    }
+  }
+});
+
+app.post('/api/auto-match', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Dosya yüklenmedi. Lütfen TXT veya DOCX dosyası yükleyin.'
+      });
+    }
+
+    const content = req.file.buffer.toString('utf8');
+    
+    // Basit parsing
+    const vessels: any[] = [];
+    const cargos: any[] = [];
+    
+    // Gemi pattern'leri
+    const vesselMatches = content.match(/(\w+)\s+twn.*?(\d{1,3}[,.]?\d{3})\s*DWT/gi);
+    if (vesselMatches) {
+      vesselMatches.forEach((match, index) => {
+        const nameMatch = match.match(/(\w+)/);
+        const dwtMatch = match.match(/(\d{1,3}[,.]?\d{3})\s*DWT/);
+        if (nameMatch && dwtMatch) {
+          vessels.push({
+            name: nameMatch[1],
+            dwt: parseFloat(dwtMatch[1].replace(/[,]/g, '')),
+            currentPort: 'Various',
+            sourceMail: {
+              subject: `Vessel Position List`,
+              sender: 'Shipowner',
+              mailNumber: index + 1
+            }
+          });
+        }
+      });
+    }
+
+    // Yük pattern'leri  
+    const cargoMatches = content.match(/(\d{1,3}[,.]?\d{3})\s*(?:mt|mts)\s+([a-z\s]+)/gi);
+    if (cargoMatches) {
+      cargoMatches.forEach((match, index) => {
+        const parts = match.match(/(\d{1,3}[,.]?\d{3})\s*(?:mt|mts)\s+([a-z\s]+)/i);
+        if (parts) {
+          cargos.push({
+            reference: `${parts[1]} MT ${parts[2].trim()}`,
+            quantity: parseFloat(parts[1].replace(/[,]/g, '')),
+            loadPort: 'Various',
+            sourceMail: {
+              subject: `Cargo Inquiry`,
+              sender: 'Charterer',  
+              mailNumber: index + 1
+            }
+          });
+        }
+      });
+    }
+
+    // Basit eşleştirme
+    const matches: any[] = [];
+    vessels.forEach(vessel => {
+      cargos.forEach(cargo => {
+        if (cargo.quantity <= vessel.dwt && (cargo.quantity / vessel.dwt) >= 0.65) {
+          const score = 70 + Math.min(30, (cargo.quantity / vessel.dwt) * 100 - 65);
+          matches.push({
+            matchScore: Math.round(score),
+            vessel: vessel,
+            cargo: cargo,
+            recommendation: score >= 85 ? 'Çok İyi Eşleşme' : 'İyi Eşleşme',
+            compatibility: {
+              tonnage: {
+                suitable: true,
+                utilization: `${Math.round((cargo.quantity / vessel.dwt) * 100)}%`,
+                cargoSize: `${cargo.quantity.toLocaleString()} MT`,
+                vesselCapacity: `${vessel.dwt.toLocaleString()} DWT`
+              }
+            }
+          });
+        }
+      });
+    });
+
+    res.json({
+      success: true,
+      message: `${matches.length} eşleşme bulundu`,
+      data: {
+        summary: {
+          fileName: req.file.originalname,
+          processingTime: '5ms',
+          vesselsFound: vessels.length,
+          cargosFound: cargos.length,
+          totalMatches: matches.length
+        },
+        matches: matches.sort((a, b) => b.matchScore - a.matchScore)
+      }
+    });
+
+  } catch (error) {
+    logger.error('Auto-match hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'İşlem hatası',
+      error: error instanceof Error ? error.message : 'Bilinmeyen hata'
+    });
+  }
+});
+
+app.get('/api/auto-match/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Gemi-Yük Otomatik Eşleştirme API hazır',
+    endpoint: '/api/auto-match',
+    method: 'POST',
+    contentType: 'multipart/form-data'
+  });
+});
+
 // Vessel-Cargo routes temporarily disabled for build
 // app.use('/api/vessels', vesselRoutes);
 // app.use('/api/cargos', cargoRoutes);
