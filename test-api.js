@@ -71,7 +71,7 @@ async function testAutoMatchAPI() {
           console.log(`      📧 Yük Maili: "${match.cargo.sourceMail.subject}" - ${match.cargo.sourceMail.sender}`);
           
           // Uyumluluk detayları
-          if (match.compatibility.requirements.missing.length > 0) {
+          if (match.compatibility.requirements && match.compatibility.requirements.missing && match.compatibility.requirements.missing.length > 0) {
             console.log(`      ⚠️  Eksik Gereksinimler: ${match.compatibility.requirements.missing.join(', ')}`);
           }
           

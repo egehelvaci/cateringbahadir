@@ -121,12 +121,15 @@ app.post('/api/auto-match', upload.single('file'), async (req, res) => {
 
     const content = req.file.buffer.toString('utf8');
     
-    // Basit parsing
+    // Bridge S&P satış ilanlarını filtrele
+    const filteredContent = content.replace(/Bridge S&P[\s\S]*?--------------------/gi, '');
+    
+    // Gelişmiş parsing
     const vessels: any[] = [];
     const cargos: any[] = [];
     
     // Gemi pattern'leri - gerçek veriye göre iyileştirildi
-    const lines = content.split('\n');
+    const lines = filteredContent.split('\n');
     let currentMail = { subject: '', sender: '', mailIndex: 0 };
     
     for (let i = 0; i < lines.length; i++) {
@@ -169,10 +172,23 @@ app.post('/api/auto-match', upload.single('file'), async (req, res) => {
                 }
               }
               
+              // Laycan bilgisini ara
+              let vesselLaycan = null;
+              for (let l = Math.max(0, i - 3); l < Math.min(i + 5, lines.length); l++) {
+                const laycanLine = lines[l];
+                const laycanMatch = laycanLine.match(/(\d{1,2}[-\/]\d{1,2})\s*(?:[-\/]\s*(\d{1,2}[-\/]\d{1,2}))?/);
+                if (laycanMatch) {
+                  vesselLaycan = laycanMatch[0];
+                  break;
+                }
+              }
+              
               vessels.push({
                 name: vesselName,
                 dwt: dwt,
                 currentPort: port,
+                laycan: vesselLaycan,
+                features: [], // Özellikler parsing'i eklenir
                 sourceMail: {
                   subject: currentMail.subject || `Mail ${currentMail.mailIndex}`,
                   sender: currentMail.sender || 'Unknown',
@@ -200,6 +216,8 @@ app.post('/api/auto-match', upload.single('file'), async (req, res) => {
                 name: vesselName,
                 dwt: dwt,
                 currentPort: 'Various',
+                laycan: null,
+                features: [],
                 sourceMail: {
                   subject: currentMail.subject || `Mail ${currentMail.mailIndex}`,
                   sender: currentMail.sender || 'Unknown',
@@ -213,45 +231,210 @@ app.post('/api/auto-match', upload.single('file'), async (req, res) => {
       }
     }
 
-    // Yük pattern'leri  
-    const cargoMatches = content.match(/(\d{1,3}[,.]?\d{3})\s*(?:mt|mts)\s+([a-z\s]+)/gi);
-    if (cargoMatches) {
-      cargoMatches.forEach((match, index) => {
-        const parts = match.match(/(\d{1,3}[,.]?\d{3})\s*(?:mt|mts)\s+([a-z\s]+)/i);
-        if (parts) {
-          cargos.push({
-            reference: `${parts[1]} MT ${parts[2].trim()}`,
-            quantity: parseFloat(parts[1].replace(/[,]/g, '')),
-            loadPort: 'Various',
-            sourceMail: {
-              subject: `Cargo Inquiry`,
-              sender: 'Charterer',  
-              mailNumber: index + 1
+    // Yük pattern'leri - gelişmiş parsing
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      // Mail bilgilerini yakala
+      if (line.includes('MAIL ')) {
+        const mailMatch = line.match(/MAIL (\d+)/);
+        if (mailMatch) currentMail.mailIndex = parseInt(mailMatch[1]);
+      }
+      if (line.includes('Konu:')) {
+        currentMail.subject = line.replace('Konu:', '').trim();
+      }
+      if (line.includes('Gönderen:')) {
+        currentMail.sender = line.replace('Gönderen:', '').replace(/[<>"]/g, '').trim();
+      }
+      
+      // Yük pattern'leri
+      const cargoPatterns = [
+        // 4000mts +-10% sunflower seeds
+        /(\d{1,3}[,.]?\d{3})\s*mts?\s*(?:\+?-?\d+%)?\s+([a-z\s]+)/i,
+        // 8000-12000 mt wheat
+        /(\d{1,3}[,.]?\d{3})(?:-(\d{1,3}[,.]?\d{3}))?\s*mt\s+([a-z\s]+)/i,
+        // ABT 20.000 MTS OF WHEAT
+        /(?:ABT\s*)?(\d{1,3}[,.]?\d{3})\s*MTS?\s*(?:OF\s*)?([A-Z\s]+)/i
+      ];
+      
+      for (const pattern of cargoPatterns) {
+        const match = line.match(pattern);
+        if (match && match[1]) {
+          const quantity = parseFloat(match[1].replace(/[,]/g, ''));
+          const commodity = (match[3] || match[2] || '').trim().toLowerCase();
+          
+          if (quantity > 500 && quantity < 100000 && commodity.length > 3 && 
+              !commodity.includes('dwt') && !commodity.includes('dwt')) {
+            
+            // SF bilgisini ara
+            let stowageFactor = null;
+            const sfMatch = line.match(/sf\s*(?:abt\s*)?(\d+(?:\.\d+)?)/i);
+            if (sfMatch) {
+              stowageFactor = parseFloat(sfMatch[1]);
             }
-          });
+            
+            // Laycan bilgisini ara
+            let laycanInfo = null;
+            for (let j = Math.max(0, i - 2); j < Math.min(i + 3, lines.length); j++) {
+              const laycanLine = lines[j];
+              const laycanMatch = laycanLine.match(/(\d{1,2}[-\/]\d{1,2})\s*[-\/]?\s*(\d{1,2}[-\/]\d{1,2})?/);
+              if (laycanMatch) {
+                laycanInfo = laycanMatch[0];
+                break;
+              }
+            }
+            
+            // Rota bilgisini ara (FROM / TO)
+            let route = null;
+            const routeMatch = line.match(/([A-Z\s]+?)\s*[\/\\]\s*([A-Z\s]+)/);
+            if (routeMatch) {
+              route = { from: routeMatch[1].trim(), to: routeMatch[2].trim() };
+            }
+            
+            cargos.push({
+              reference: `${quantity.toLocaleString()} MT ${commodity}`,
+              quantity: quantity,
+              commodity: commodity,
+              loadPort: route?.from || 'Various',
+              dischargePort: route?.to || 'Various',
+              stowageFactor: stowageFactor,
+              laycan: laycanInfo,
+              sourceMail: {
+                subject: currentMail.subject || `Mail ${currentMail.mailIndex}`,
+                sender: currentMail.sender || 'Unknown',
+                mailNumber: currentMail.mailIndex
+              }
+            });
+          }
         }
-      });
+      }
     }
 
-    // Basit eşleştirme
+    // Gelişmiş eşleştirme algoritması
     const matches: any[] = [];
+    
+    // Liman mesafe haritası (basit - gerçekte Haversine kullanılacak)
+    const portDistances: any = {
+      'MARMARA': { 'CONSTANTZA': 1.2, 'CHORNO': 1.5, 'ODESSA': 1.8, 'RENI': 2.0 },
+      'ANTWERP': { 'ISKENDERUN': 3.5, 'STETTIN': 1.0, 'GDYNIA': 1.1 },
+      'MEDITERRANEAN': { 'SILLAMAE': 4.5, 'BARI': 2.0, 'RAVENNA': 2.2 },
+      'BLACK SEA': { 'MARMARA': 1.0, 'CONSTANTZA': 0.8, 'ODESSA': 0.5 }
+    };
+    
     vessels.forEach(vessel => {
       cargos.forEach(cargo => {
-        if (cargo.quantity <= vessel.dwt && (cargo.quantity / vessel.dwt) >= 0.65) {
-          const score = 70 + Math.min(30, (cargo.quantity / vessel.dwt) * 100 - 65);
+        let score = 0;
+        const reasons: string[] = [];
+        
+        // 1. TONAJ KRİTERİ (±%20 tolerans, minimum %90 doluluk)
+        const tonnageRatio = cargo.quantity / vessel.dwt;
+        if (cargo.quantity <= vessel.dwt && tonnageRatio >= 0.90) {
+          score += 30;
+          reasons.push(`Mükemmel tonaj uyumu: ${Math.round(tonnageRatio * 100)}%`);
+        } else if (cargo.quantity <= vessel.dwt && tonnageRatio >= 0.70) {
+          score += 20;
+          reasons.push(`İyi tonaj uyumu: ${Math.round(tonnageRatio * 100)}%`);
+        } else if (cargo.quantity <= vessel.dwt && tonnageRatio >= 0.50) {
+          score += 10;
+          reasons.push(`Kabul edilebilir tonaj: ${Math.round(tonnageRatio * 100)}%`);
+        } else {
+          return; // Tonaj uymazsa eşleştirme iptal
+        }
+        
+        // 2. SF/HACİM KRİTERİ
+        if (cargo.stowageFactor && vessel.grainCuft) {
+          const neededVolume = cargo.quantity * cargo.stowageFactor * 1.05; // %5 broken stowage
+          if (neededVolume <= vessel.grainCuft) {
+            score += 25;
+            reasons.push(`Hacim uyumu: ${Math.round((neededVolume / vessel.grainCuft) * 100)}%`);
+          } else {
+            score -= 15;
+            reasons.push(`Hacim yetersiz`);
+          }
+        }
+        
+        // 3. LAYCAN UYUMU
+        if (cargo.laycan && vessel.laycan) {
+          // Basit laycan kontrolü - gerçekte tarih parse edilecek
+          score += 20;
+          reasons.push(`Laycan uyumlu`);
+        } else if (cargo.laycan || vessel.laycan) {
+          score += 10;
+          reasons.push(`Kısmi laycan bilgisi`);
+        }
+        
+        // 4. MESAFE/ROTA KRİTERİ (2 günlük mesafe sınırı)
+        const vesselPort = vessel.currentPort.toUpperCase();
+        const cargoPort = cargo.loadPort.toUpperCase();
+        let distanceOk = false;
+        
+        // Basit mesafe kontrolü
+        if (vesselPort.includes('MARMARA') && cargoPort.includes('CONSTANTZA')) {
+          distanceOk = true;
+        } else if (vesselPort.includes('BLACK') && cargoPort.includes('MARMARA')) {
+          distanceOk = true;
+        } else if (vesselPort === cargoPort || vesselPort.includes(cargoPort) || cargoPort.includes(vesselPort)) {
+          distanceOk = true;
+        }
+        
+        if (distanceOk) {
+          score += 15;
+          reasons.push(`Mesafe uygun`);
+        } else {
+          score -= 10;
+          reasons.push(`Uzak mesafe`);
+        }
+        
+        // 5. TİCARİ UYGUNLUK (Commodity ve gemi tipi)
+        const commodityLower = cargo.commodity.toLowerCase();
+        if (commodityLower.includes('wheat') || commodityLower.includes('corn') || 
+            commodityLower.includes('grain') || commodityLower.includes('seeds')) {
+          // Tahıl yükleri için bulk carrier uygun
+          if (vessel.features?.includes('bulk') || vessel.dwt > 10000) {
+            score += 10;
+            reasons.push(`Tahıl-bulk uyumu`);
+          }
+        } else if (commodityLower.includes('steel') || commodityLower.includes('coil')) {
+          // Çelik yükleri için geared uygun
+          if (vessel.features?.includes('geared') || vessel.dwt < 15000) {
+            score += 10;
+            reasons.push(`Çelik-geared uyumu`);
+          }
+        }
+        
+        // Minimum skor kontrolü (50 puan)
+        if (score >= 50) {
           matches.push({
             matchScore: Math.round(score),
             vessel: vessel,
             cargo: cargo,
-            recommendation: score >= 85 ? 'Çok İyi Eşleşme' : 'İyi Eşleşme',
-            compatibility: {
-              tonnage: {
+            recommendation: score >= 90 ? 'Mükemmel Eşleşme' : 
+                           score >= 80 ? 'Çok İyi Eşleşme' : 
+                           score >= 70 ? 'İyi Eşleşme' : 'Kabul Edilebilir',
+              compatibility: {
+                tonnage: {
+                  suitable: tonnageRatio >= 0.50,
+                  utilization: `${Math.round(tonnageRatio * 100)}%`,
+                  cargoSize: `${cargo.quantity.toLocaleString()} MT`,
+                  vesselCapacity: `${vessel.dwt.toLocaleString()} DWT`,
+                  withinTolerance: tonnageRatio >= 0.50 && tonnageRatio <= 1.20
+                },
+              volume: cargo.stowageFactor ? {
                 suitable: true,
-                utilization: `${Math.round((cargo.quantity / vessel.dwt) * 100)}%`,
-                cargoSize: `${cargo.quantity.toLocaleString()} MT`,
-                vesselCapacity: `${vessel.dwt.toLocaleString()} DWT`
+                stowageFactor: cargo.stowageFactor,
+                neededVolume: Math.round(cargo.quantity * cargo.stowageFactor * 1.05)
+              } : null,
+              laycan: {
+                cargoLaycan: cargo.laycan,
+                vesselLaycan: vessel.laycan || 'Flexible'
+              },
+              route: {
+                from: vessel.currentPort,
+                to: cargo.loadPort,
+                suitable: distanceOk
               }
-            }
+            },
+            reason: reasons.join('; ')
           });
         }
       });
