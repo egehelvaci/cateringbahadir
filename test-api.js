@@ -65,6 +65,7 @@ async function testAutoMatchAPI() {
           console.log(`      📊 Skor: ${match.matchScore}/100 (${match.recommendation})`);
           console.log(`      📍 ${match.vessel.currentPort} → ${match.cargo.loadPort}`);
           console.log(`      ⚖️  Tonaj: ${match.compatibility.tonnage.cargoSize} / ${match.compatibility.tonnage.vesselCapacity} (${match.compatibility.tonnage.utilization})`);
+          console.log(`      🧭 Mesafe: ${match.compatibility.route.distance} - ${match.compatibility.route.sailingDays} gün (10 knot)`);
           
           // Mail bilgileri
           console.log(`      📧 Gemi Maili: "${match.vessel.sourceMail.subject}" - ${match.vessel.sourceMail.sender}`);

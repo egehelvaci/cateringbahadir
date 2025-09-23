@@ -313,13 +313,87 @@ app.post('/api/auto-match', upload.single('file'), async (req, res) => {
     // Gelişmiş eşleştirme algoritması
     const matches: any[] = [];
     
-    // Liman mesafe haritası (basit - gerçekte Haversine kullanılacak)
-    const portDistances: any = {
-      'MARMARA': { 'CONSTANTZA': 1.2, 'CHORNO': 1.5, 'ODESSA': 1.8, 'RENI': 2.0 },
-      'ANTWERP': { 'ISKENDERUN': 3.5, 'STETTIN': 1.0, 'GDYNIA': 1.1 },
-      'MEDITERRANEAN': { 'SILLAMAE': 4.5, 'BARI': 2.0, 'RAVENNA': 2.2 },
-      'BLACK SEA': { 'MARMARA': 1.0, 'CONSTANTZA': 0.8, 'ODESSA': 0.5 }
+    // Liman koordinatları (Haversine hesabı için)
+    const portCoordinates: any = {
+      'MARMARA': { lat: 40.7, lon: 29.1 },
+      'ISTANBUL': { lat: 41.0, lon: 29.0 },
+      'GEMLIK': { lat: 40.43, lon: 29.15 },
+      'CONSTANTZA': { lat: 44.17, lon: 28.65 },
+      'CONSTANTA': { lat: 44.17, lon: 28.65 },
+      'CHORNO': { lat: 46.30, lon: 30.66 },
+      'CHORNOMORSK': { lat: 46.30, lon: 30.66 },
+      'ODESSA': { lat: 46.49, lon: 30.73 },
+      'RENI': { lat: 45.45, lon: 28.27 },
+      'BLACK SEA': { lat: 44.0, lon: 35.0 },
+      'ANTWERP': { lat: 51.22, lon: 4.40 },
+      'ROTTERDAM': { lat: 51.92, lon: 4.48 },
+      'ISKENDERUN': { lat: 36.60, lon: 36.17 },
+      'STETTIN': { lat: 53.42, lon: 14.55 },
+      'GDYNIA': { lat: 54.52, lon: 18.54 },
+      'SILLAMAE': { lat: 59.40, lon: 27.77 },
+      'BARI': { lat: 41.13, lon: 16.87 },
+      'RAVENNA': { lat: 44.42, lon: 12.20 },
+      'VALENCIA': { lat: 39.47, lon: -0.38 },
+      'TARRAGONA': { lat: 41.11, lon: 1.25 },
+      'MALTA': { lat: 35.90, lon: 14.51 },
+      'ALEXANDRIA': { lat: 31.20, lon: 29.92 },
+      'CASABLANCA': { lat: 33.60, lon: -7.62 }
     };
+    
+    // Haversine formülü - iki liman arası mesafe (nautical miles)
+    function calculateDistance(port1: string, port2: string): number {
+      // Liman ismi eşleştirmesi (fuzzy matching)
+      const findPort = (portName: string) => {
+        const name = portName.toUpperCase().trim();
+        
+        // Tam eşleşme
+        if (portCoordinates[name]) return portCoordinates[name];
+        
+        // Kısmi eşleşme
+        for (const [key, coord] of Object.entries(portCoordinates)) {
+          if (name.includes(key) || key.includes(name)) {
+            return coord;
+          }
+        }
+        
+        return null;
+      };
+      
+      const coord1 = findPort(port1);
+      const coord2 = findPort(port2);
+      
+      if (!coord1 || !coord2) {
+        // Bilinmeyen liman - aynı bölge varsayımı
+        if (port1.toUpperCase().includes('BLACK') || port2.toUpperCase().includes('BLACK') ||
+            port1.toUpperCase().includes('MARMARA') || port2.toUpperCase().includes('MARMARA')) {
+          return 240; // ~1 günlük mesafe varsayımı
+        }
+        return 600; // ~2.5 günlük mesafe varsayımı
+      }
+      
+      const R = 3440.065; // Dünya yarıçapı (nautical miles)
+      const lat1Rad = (coord1.lat * Math.PI) / 180;
+      const lon1Rad = (coord1.lon * Math.PI) / 180;
+      const lat2Rad = (coord2.lat * Math.PI) / 180;
+      const lon2Rad = (coord2.lon * Math.PI) / 180;
+
+      const dlat = lat2Rad - lat1Rad;
+      const dlon = lon2Rad - lon1Rad;
+
+      const a = Math.sin(dlat / 2) ** 2 + 
+                Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(dlon / 2) ** 2;
+      const c = 2 * Math.asin(Math.sqrt(a));
+
+      return R * c; // Nautical miles
+    }
+    
+    // Seyir süresi hesabı (10 knot hız + %20 rota faktörü)
+    function calculateSailingDays(distance: number): number {
+      const speed = 10; // knots
+      const routeFactor = 1.20; // %20 rota sapması
+      const hours = (distance * routeFactor) / speed;
+      return hours / 24; // gün cinsinden
+    }
     
     vessels.forEach(vessel => {
       cargos.forEach(cargo => {
@@ -363,26 +437,22 @@ app.post('/api/auto-match', upload.single('file'), async (req, res) => {
           reasons.push(`Kısmi laycan bilgisi`);
         }
         
-        // 4. MESAFE/ROTA KRİTERİ (2 günlük mesafe sınırı)
-        const vesselPort = vessel.currentPort.toUpperCase();
-        const cargoPort = cargo.loadPort.toUpperCase();
-        let distanceOk = false;
+        // 4. MESAFE/ROTA KRİTERİ (2 günlük mesafe sınırı, 10 knot hız)
+        const vesselPort = vessel.currentPort.trim();
+        const cargoPort = cargo.loadPort.trim();
         
-        // Basit mesafe kontrolü
-        if (vesselPort.includes('MARMARA') && cargoPort.includes('CONSTANTZA')) {
-          distanceOk = true;
-        } else if (vesselPort.includes('BLACK') && cargoPort.includes('MARMARA')) {
-          distanceOk = true;
-        } else if (vesselPort === cargoPort || vesselPort.includes(cargoPort) || cargoPort.includes(vesselPort)) {
-          distanceOk = true;
-        }
+        const distance = calculateDistance(vesselPort, cargoPort);
+        const sailingDays = calculateSailingDays(distance);
         
-        if (distanceOk) {
-          score += 15;
-          reasons.push(`Mesafe uygun`);
+        if (sailingDays <= 2.0) {
+          score += 20;
+          reasons.push(`Mesafe uygun: ${sailingDays.toFixed(1)} gün (${distance.toFixed(0)} NM)`);
+        } else if (sailingDays <= 3.0) {
+          score += 10;
+          reasons.push(`Mesafe kabul edilebilir: ${sailingDays.toFixed(1)} gün`);
         } else {
-          score -= 10;
-          reasons.push(`Uzak mesafe`);
+          score -= 15;
+          reasons.push(`Uzak mesafe: ${sailingDays.toFixed(1)} gün`);
         }
         
         // 5. TİCARİ UYGUNLUK (Commodity ve gemi tipi)
@@ -431,7 +501,9 @@ app.post('/api/auto-match', upload.single('file'), async (req, res) => {
               route: {
                 from: vessel.currentPort,
                 to: cargo.loadPort,
-                suitable: distanceOk
+                distance: `${distance.toFixed(0)} NM`,
+                sailingDays: sailingDays.toFixed(1),
+                suitable: sailingDays <= 2.0
               }
             },
             reason: reasons.join('; ')
